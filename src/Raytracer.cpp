@@ -62,56 +62,72 @@ bool color(const ray& r, hitable *world, vec3& sample_clr, ray& scattered) {
 int main() {
 	int nx = 600;
 	int ny = 300;
-	int ns = 2;
+	int ns = 10;
 	int max_depth = 50;
 	hitable *world = random_scene();
 
+    // init camera
     vec3 lookfrom(13,2,3);
     vec3 lookat(0,0,0);
     float dist_to_focus = 10.0;
     float aperture = 0.1;
-
     camera cam(lookfrom, lookat, vec3(0,1,0), 20, float(nx)/float(ny), aperture, dist_to_focus);
 
-    unsigned int num_rays = nx*ny*ns;
-    ray *rays[num_rays];
-    unsigned int ray_sample_ids[num_rays];
-    vec3 *sample_colors[num_rays];
+    const unsigned int all_rays = nx*ny;
+    ray *rays[all_rays];
+    vec3 *colors[all_rays];
+    unsigned int ray_sample_ids[all_rays];
+    vec3 *sample_colors[all_rays];
 
-    // generate all camera rays
-    unsigned int ray_idx = 0;
-    for (int j = ny-1; j >= 0; j--)
+    // init cumulated colors
+    for (int i = 0; i < all_rays; i++)
+    		colors[i] = new vec3(0, 0, 0);
+
+    // init sample colors
+    for (int i = 0; i < all_rays; i++)
+    		sample_colors[i] = new vec3(1, 1, 1);
+
+    for (unsigned int s = 0; s < ns; ++s)
     {
-		for (int i = 0; i < nx; ++i)
-		{
-			for (int s = 0; s < ns; ++s, ++ray_idx)
+    		// reset samples
+        for (int i = 0; i < all_rays; i++)
+        		*(sample_colors[i]) = vec3(1, 1, 1);
+
+        // generate all camera rays, but just for one sample per pixel
+        unsigned int ray_idx = 0;
+        for (int j = ny-1; j >= 0; j--)
+        {
+			for (int i = 0; i < nx; ++i, ++ray_idx)
 			{
 				float u = float(i + drand48()) / float(nx);
 				float v = float(j + drand48()) / float(ny);
 				rays[ray_idx] = new ray();
 				cam.get_ray(u, v, *(rays[ray_idx]));
 				ray_sample_ids[ray_idx] = ray_idx;
-
-				sample_colors[ray_idx] = new vec3(1, 1, 1);
 			}
-		}
-    }
-
-    // compute ray-world intersections
-    unsigned int depth = 0;
-    while (depth < max_depth && num_rays > 0)
-    {
-        ray_idx = 0;
-        for (unsigned int i = 0; i < num_rays; i++)
-        {
-        		if (color(*rays[i], world, *sample_colors[ray_sample_ids[i]], *rays[ray_idx]))
-        		{
-        			ray_sample_ids[ray_idx] = ray_sample_ids[i];
-        			++ray_idx;
-        		}
         }
-        num_rays = ray_idx;
-        ++depth;
+
+        // compute ray-world intersections
+        unsigned int depth = 0;
+        unsigned int num_rays = all_rays;
+        while (depth < max_depth && num_rays > 0)
+        {
+            ray_idx = 0;
+            for (unsigned int i = 0; i < num_rays; ++i)
+            {
+            		if (color(*rays[i], world, *sample_colors[ray_sample_ids[i]], *rays[ray_idx]))
+            		{
+            			ray_sample_ids[ray_idx] = ray_sample_ids[i];
+            			++ray_idx;
+            		}
+            }
+            num_rays = ray_idx;
+            ++depth;
+        }
+
+        // cumulate sample colors
+        for (unsigned int i = 0; i < all_rays; ++i)
+        		*(colors[i]) += *(sample_colors[i]);
     }
 
     // combine pixels samples and generate final image
@@ -119,15 +135,9 @@ int main() {
     unsigned int sample_idx = 0;
     for (int j = ny-1; j >= 0; j--)
     {
-		for (int i = 0; i < nx; ++i)
+		for (int i = 0; i < nx; ++i, sample_idx++)
 		{
-			vec3 col(0, 0, 0);
-			for (int s = 0; s < ns; ++s, ++sample_idx)
-			{
-				col += *sample_colors[sample_idx];
-			}
-
-			col /= float(ns);
+			vec3 col = *(colors[sample_idx]) / float(ns);
 			col = vec3( sqrtf(col[0]), sqrtf(col[1]), sqrtf(col[2]) );
 			int ir = int(255.99*col.r());
 			int ig = int(255.99*col.g());
