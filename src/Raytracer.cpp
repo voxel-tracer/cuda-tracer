@@ -59,10 +59,9 @@ vec3 color(const ray& r, hitable *world, int depth) {
 }
 
 int main() {
-	int nx = 600;
-	int ny = 300;
-	int ns = 100;
-	cout << "P3\n" << nx << " " << ny << "\n255\n";
+	int nx = 200;
+	int ny = 100;
+	int ns = 4;
 	hitable *world = random_scene();
 
     vec3 lookfrom(13,2,3);
@@ -72,15 +71,50 @@ int main() {
 
     camera cam(lookfrom, lookat, vec3(0,1,0), 20, float(nx)/float(ny), aperture, dist_to_focus);
 
-    for (int j = ny-1; j >= 0; j--) {
-		for (int i = 0; i < nx; ++i) {
-			vec3 col(0, 0, 0);
-			for (int s = 0; s < ns; ++s) {
+    // generate all rays
+    unsigned int num_rays = nx*ny*ns;
+    ray *rays[num_rays];
+    unsigned int ray_sample_ids[num_rays];
+    vec3 *sample_colors[num_rays];
+
+    unsigned int ray_idx = 0;
+    for (int j = ny-1; j >= 0; j--)
+    {
+		for (int i = 0; i < nx; ++i)
+		{
+			for (int s = 0; s < ns; ++s, ++ray_idx)
+			{
 				float u = float(i + drand48()) / float(nx);
 				float v = float(j + drand48()) / float(ny);
-				ray r = cam.get_ray(u, v);
-				col += color(r, world, 0);
+				rays[ray_idx] = new ray();
+				cam.get_ray(u, v, *(rays[ray_idx]));
+				ray_sample_ids[ray_idx] = ray_idx;
+
+				sample_colors[ray_idx] = new vec3(0, 0, 0);
 			}
+		}
+    }
+
+    // compute ray-world intersections
+    for (unsigned int i = 0; i < num_rays; i++)
+    {
+    		ray *r = rays[i];
+    		(*sample_colors[ray_sample_ids[i]]) += color(*r, world, 0);
+    }
+
+    // combine pixels samples and generate final image
+	cout << "P3\n" << nx << " " << ny << "\n255\n";
+    unsigned int sample_idx = 0;
+    for (int j = ny-1; j >= 0; j--)
+    {
+		for (int i = 0; i < nx; ++i)
+		{
+			vec3 col(0, 0, 0);
+			for (int s = 0; s < ns; ++s, ++sample_idx)
+			{
+				col += *sample_colors[sample_idx];
+			}
+
 			col /= float(ns);
 			col = vec3( sqrtf(col[0]), sqrtf(col[1]), sqrtf(col[2]) );
 			int ir = int(255.99*col.r());
@@ -89,6 +123,6 @@ int main() {
 
 			cout << ir << " " << ig << " " << ib << "\n";
 		}
-	}
+    }
 	return 0;
 }

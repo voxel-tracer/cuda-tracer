@@ -20,10 +20,12 @@ public:
 		vertical = 2*half_height*focus_dist*v;
 	}
 
-	ray get_ray(float s, float t) {
+	void get_ray(float s, float t, ray& r) {
 		vec3 rd = lens_radius*random_in_unit_disk();
 		vec3 offset = u*rd.x() + v*rd.y();
-		return ray(origin + offset, lower_left_corner + s*horizontal + t*vertical - origin - offset);
+
+		r.A = origin + offset;
+		r.B = lower_left_corner + s*horizontal + t*vertical - origin - offset;
 	}
 
 	vec3 origin;
