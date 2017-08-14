@@ -1,4 +1,7 @@
 #include <iostream>
+#include <fstream>
+#include <ctime>
+
 #include "hitable_list.h"
 #include "sphere.h"
 #include "ray.h"
@@ -62,7 +65,7 @@ bool color(const ray& r, hitable *world, vec3& sample_clr, ray& scattered) {
 int main() {
 	int nx = 600;
 	int ny = 300;
-	int ns = 10;
+	int ns = 100;
 	int max_depth = 50;
 	hitable *world = random_scene();
 
@@ -87,8 +90,12 @@ int main() {
     for (int i = 0; i < all_rays; i++)
     		sample_colors[i] = new vec3(1, 1, 1);
 
+    clock_t begin = clock();
     for (unsigned int s = 0; s < ns; ++s)
     {
+    		cout << "sample " << s << "/" << ns << "\r";
+    		cout.flush();
+
     		// reset samples
         for (int i = 0; i < all_rays; i++)
         		*(sample_colors[i]) = vec3(1, 1, 1);
@@ -130,8 +137,13 @@ int main() {
         		*(colors[i]) += *(sample_colors[i]);
     }
 
-    // combine pixels samples and generate final image
-	cout << "P3\n" << nx << " " << ny << "\n255\n";
+    clock_t end = clock();
+    printf("rendering duration %.2f seconds", double(end - begin) / CLOCKS_PER_SEC);
+
+    // generate final image
+    ofstream image;
+    image.open("picture.ppm");
+	image << "P3\n" << nx << " " << ny << "\n255\n";
     unsigned int sample_idx = 0;
     for (int j = ny-1; j >= 0; j--)
     {
@@ -143,7 +155,7 @@ int main() {
 			int ig = int(255.99*col.g());
 			int ib = int(255.99*col.b());
 
-			cout << ir << " " << ig << " " << ib << "\n";
+			image << ir << " " << ig << " " << ib << "\n";
 		}
     }
 	return 0;
