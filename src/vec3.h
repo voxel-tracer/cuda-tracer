@@ -4,6 +4,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <iostream>
+#include <vector_functions.h>
 
 class vec3  {
 
@@ -11,6 +12,7 @@ class vec3  {
 public:
     vec3() {}
     vec3(float e0, float e1, float e2) { e[0] = e0; e[1] = e1; e[2] = e2; }
+    vec3(float3 v) { e[0] = v.x; e[1] = v.y; e[2] = v.z; }
     inline float x() const { return e[0]; }
     inline float y() const { return e[1]; }
     inline float z() const { return e[2]; }
@@ -33,7 +35,12 @@ public:
     inline float length() const { return sqrt(e[0]*e[0] + e[1]*e[1] + e[2]*e[2]); }
     inline float squared_length() const { return e[0]*e[0] + e[1]*e[1] + e[2]*e[2]; }
     inline void make_unit_vector();
-
+    inline float3 to_float3() const { return make_float3(e[0], e[1], e[2]); }
+    inline char* to_string(char* str) const
+    {
+    	sprintf(str, "(%.4f, %.4f, %.4f)", e[0], e[1], e[2]);
+    	return str;
+    }
 
     float e[3];
 };

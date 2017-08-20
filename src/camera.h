@@ -20,7 +20,7 @@ public:
 		vertical = 2*half_height*focus_dist*v;
 	}
 
-	void get_ray(float s, float t, ray& r) {
+	void get_ray(float s, float t, ray& r) const {
 		vec3 rd = lens_radius*random_in_unit_disk();
 		vec3 offset = u*rd.x() + v*rd.y();
 

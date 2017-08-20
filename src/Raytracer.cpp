@@ -1,4 +1,5 @@
 #include <iostream>
+#include <float.h>
 #include <fstream>
 #include <ctime>
 
@@ -93,8 +94,8 @@ int main() {
     clock_t begin = clock();
     for (unsigned int s = 0; s < ns; ++s)
     {
-    		cout << "sample " << s << "/" << ns << "\r";
-    		cout.flush();
+		cout << "sample " << s << "/" << ns << "\r";
+		cout.flush();
 
     		// reset samples
         for (int i = 0; i < all_rays; i++)
