@@ -1,0 +1,8 @@
+Debug
+Release
+
+*.db
+*.opendb
+*.pdb
+
+*.ppm
