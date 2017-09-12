@@ -29,7 +29,7 @@
     <ClInclude Include="vec3.h" />
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="RaytracerGPU.cu" />
+    <CudaCompile Include="raytracer.cu" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{51062B2E-9E77-4127-91AC-1E9F78E9D9C3}</ProjectGuid>
