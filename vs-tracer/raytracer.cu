@@ -262,6 +262,8 @@ main(void)
 	err(cudaMemcpy(d_scene, h_scene, world->list_size * sizeof(cu_sphere), cudaMemcpyHostToDevice), "copy scene from host to device");
 
     clock_t begin = clock();
+	clock_t kernel = 0;
+	clock_t generate = 0;
     for (unsigned int s = 0; s < ns; ++s)
     {
 		if (s % 10 == 0)
@@ -279,13 +281,16 @@ main(void)
         }
 
 		//cout << "generate rays\n";
+		clock_t start = clock();
         generate_rays(cam, h_rays, nx, ny);
+		generate += clock() - start;
 
         // compute ray-world intersections
         unsigned int depth = 0;
         unsigned int num_rays = all_rays;
         while (depth < max_depth && num_rays > 0)
         {
+			clock_t start = clock();
 			//cout << "copying rays to device...";
 			err(cudaMemcpy(d_rays, h_rays, num_rays * sizeof(cu_ray), cudaMemcpyHostToDevice), "copy rays from host to device");
 			//cout << "done\n";
@@ -299,6 +304,7 @@ main(void)
 			//cout << "done\n";
             // Copy the device result in device memory to the host result vector
 			err(cudaMemcpy(h_hits, d_hits, num_rays * sizeof(cu_hit), cudaMemcpyDeviceToHost), "copy results from device to host");
+			kernel += clock() - start;
 
             // compact active rays
         	unsigned int ray_idx = 0;
@@ -320,7 +326,10 @@ main(void)
     }
 
     clock_t end = clock();
-    printf("rendering duration %.2f seconds", double(end - begin) / CLOCKS_PER_SEC);
+    printf("rendering duration %.2f seconds\nkernel %.2f seconds\ngenerate %.2f seconds\n", 
+		double(end - begin) / CLOCKS_PER_SEC, 
+		double(kernel) / CLOCKS_PER_SEC,
+		double(generate) / CLOCKS_PER_SEC);
 
     // Free device global memory
 	err(cudaFree(d_scene), "free device d_scene");
