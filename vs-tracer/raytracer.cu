@@ -264,6 +264,8 @@ main(void)
     clock_t begin = clock();
 	clock_t kernel = 0;
 	clock_t generate = 0;
+	clock_t compact = 0;
+	clock_t cumul = 0;
     for (unsigned int s = 0; s < ns; ++s)
     {
 		if (s % 10 == 0)
@@ -296,7 +298,7 @@ main(void)
 			//cout << "done\n";
 
             // Launch the CUDA Kernel
-            int threadsPerBlock = 256;
+            int threadsPerBlock = 128;
             int blocksPerGrid =(num_rays + threadsPerBlock - 1) / threadsPerBlock;
 			//cout << "launching kernel...";
             hit_scene<<<blocksPerGrid, threadsPerBlock>>>(d_rays, num_rays, d_scene, scene_size, 0.001, FLT_MAX, d_hits);
@@ -307,6 +309,7 @@ main(void)
 			kernel += clock() - start;
 
             // compact active rays
+			start = clock();
         	unsigned int ray_idx = 0;
             for (unsigned int i = 0; i < num_rays; ++i)
             {
@@ -316,20 +319,25 @@ main(void)
             			++ray_idx;
             		}
             }
+			compact += clock() - start;
             num_rays = ray_idx;
             ++depth;
         }
 
         // cumulate sample colors
+		start = clock();
         for (unsigned int i = 0; i < all_rays; ++i)
         		h_colors[i] += h_sample_colors[i];
+		cumul += clock() - start;
     }
 
     clock_t end = clock();
-    printf("rendering duration %.2f seconds\nkernel %.2f seconds\ngenerate %.2f seconds\n", 
+    printf("rendering duration %.2f seconds\nkernel %.2f seconds\ngenerate %.2f seconds\ncompact %.2f seconds\ncumul %.2f seconds\n", 
 		double(end - begin) / CLOCKS_PER_SEC, 
 		double(kernel) / CLOCKS_PER_SEC,
-		double(generate) / CLOCKS_PER_SEC);
+		double(generate) / CLOCKS_PER_SEC,
+		double(compact) / CLOCKS_PER_SEC,
+		double(cumul) / CLOCKS_PER_SEC);
 
     // Free device global memory
 	err(cudaFree(d_scene), "free device d_scene");
