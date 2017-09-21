@@ -5,7 +5,7 @@
 
 // For the CUDA runtime routines (prefixed with "cuda_")
 #include <cuda_runtime.h>
-
+#include <cuda_profiler_api.h>
 #include <helper_cuda.h>
 
 #include "sphere.h"
@@ -219,14 +219,6 @@ main(void)
 	unsigned int *h_ray_sample_ids = new unsigned int[all_rays]; //(unsigned int *) malloc(all_rays*sizeof(unsigned int));
 	vec3 *h_sample_colors = new vec3[all_rays]; //(vec3**) malloc(all_rays* sizeof(vec3*));
 
-    // init cumulated colors
-    //for (int i = 0; i < all_rays; i++)
-    //		h_colors[i] = new vec3(0, 0, 0);
-
-    // init sample colors
-    //for (int i = 0; i < all_rays; i++)
-    //		h_sample_colors[i] = new vec3(1, 1, 1);
-
 	cu_hit *h_hits = new cu_hit[all_rays]; //(cu_hit*) malloc(all_rays*sizeof(cu_hit));
 
     // allocate device memory for input
@@ -273,6 +265,7 @@ main(void)
         unsigned int num_rays = all_rays;
         while (depth < max_depth && num_rays > 0)
         {
+			cudaProfilerStart();
 			clock_t start = clock();
 			//cout << "copying rays to device...";
 			err(cudaMemcpy(d_rays, h_rays, num_rays * sizeof(cu_ray), cudaMemcpyHostToDevice), "copy rays from host to device");
@@ -288,6 +281,7 @@ main(void)
             // Copy the device result in device memory to the host result vector
 			err(cudaMemcpy(h_hits, d_hits, num_rays * sizeof(cu_hit), cudaMemcpyDeviceToHost), "copy results from device to host");
 			kernel += clock() - start;
+			cudaProfilerStop();
 
             // compact active rays
 			start = clock();
