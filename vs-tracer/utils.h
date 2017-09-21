@@ -5,16 +5,29 @@
 
 #include "vec3.h"
 
-float drand48()
-{
-	return (float) rand() / RAND_MAX;
+static unsigned int g_seed;
+
+// Used to seed the generator.           
+inline void fast_srand(int seed) {
+	g_seed = seed;
+}
+
+// Compute a pseudorandom integer.
+// Output value in range [0, 32767]
+inline float drand48(void) {
+	g_seed = (214013 * g_seed + 2531011);
+	return (float)((g_seed >> 16) & 0x7FFF) / 32767;
 }
 
 vec3 random_in_unit_sphere() {
-	vec3 p;
-	do {
-		p = 2.0*vec3(drand48(), drand48(), drand48()) - vec3(1,1,1);
-	} while (p.squared_length() >= 1.0);
+	//vec3 p;
+	//do {
+	//	p = vec3(2 * drand48() - 1, 2 * drand48() - 1, 2 * drand48() - 1);
+	//} while (p.squared_length() >= 1.0);
+	//return p;
+	vec3 p = vec3(2 * drand48() - 1, 2 * drand48() - 1, 2 * drand48() - 1);
+	if (p.squared_length() > 1.0)
+		return unit_vector(p);
 	return p;
 }
 
