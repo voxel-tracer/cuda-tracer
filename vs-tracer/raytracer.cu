@@ -141,7 +141,7 @@ hit_scene(const cu_ray* rays, const unsigned int num_rays, const cu_sphere* scen
 //    if (i == DBG_ID) printf("hit_scene: hit_idx = %d, hit_t = %.2f\n", hit_idx, closest_hit);
 }
 
-bool color(const unsigned int sample_id, const cu_ray& cu_r, const cu_hit& hit, const hitable_list *world, vec3& sample_clr, cu_ray& scattered) {
+bool color(const unsigned int sample_id, cu_ray& cu_r, const cu_hit& hit, const hitable_list *world, vec3& sample_clr, const unsigned int max_depth, cu_ray& scattered) {
 	ray r = ray(vec3(cu_r.origin), vec3(cu_r.direction));
 
 	if (hit.hit_idx == -1) {
@@ -161,9 +161,11 @@ bool color(const unsigned int sample_id, const cu_ray& cu_r, const cu_hit& hit, 
 	rec.mat_ptr = s->mat_ptr;
 
 	vec3 attenuation;
-	if (scatter(*rec.mat_ptr, r, rec, attenuation, r)) {
+	if ((++cu_r.depth) <= max_depth && scatter(*rec.mat_ptr, r, rec, attenuation, r)) {
 		scattered.origin = r.origin().to_float3();
 		scattered.direction = r.direction().to_float3();
+		scattered.depth = cu_r.depth;
+		scattered.samples = cu_r.samples;
 
 		sample_clr *= attenuation;
 //		if (sample_id == DBG_ID) printf("scatter: %s\n", sample_clr.to_string(buffer));
@@ -195,7 +197,7 @@ main(void)
 
 	const int nx = 600;
 	const int ny = 300;
-	const int ns = 100;
+	const int ns = 1000;
 	const int max_depth = 50;
     const hitable_list *world = random_scene();
 
@@ -247,7 +249,7 @@ main(void)
 		if (iteration % 100 == 0)
 		{
 			//cout << "iteration " << iteration << "(" << num_rays << " rays)\n";
-			cout << "iteration " << iteration << "\r";
+			//cout << "iteration " << iteration << "\r";
 			cout.flush();
 		}
 
@@ -274,29 +276,27 @@ main(void)
 		unsigned int ray_idx = 0;
 		for (unsigned int i = 0; i < num_rays; ++i)
 		{
-			bool active = false;
-			if (color(h_ray_sample_ids[i], h_rays[i], h_hits[i], world, h_sample_colors[h_ray_sample_ids[i]], h_rays[ray_idx]))
+			const unsigned int sampleId = h_ray_sample_ids[i];
+			if (color(sampleId, h_rays[i], h_hits[i], world, h_sample_colors[sampleId], max_depth, h_rays[ray_idx]))
 			{
-				// ray still active if it didn't reach max_depth yet
-				active = ++(h_rays[ray_idx].depth) < max_depth;
-			}
-
-			if (active)
-			{
-				h_ray_sample_ids[ray_idx] = h_ray_sample_ids[i];
+				h_ray_sample_ids[ray_idx] = sampleId;
 				++ray_idx;
 			}
 			else
 			{
-				// ray is no longe active, first cumulate its color
-				h_colors[i] += h_sample_colors[h_ray_sample_ids[i]];
-				if (++(h_rays[ray_idx].samples) < ns)
+				// ray is no longer active, first cumulate its color
+				h_colors[sampleId] += h_sample_colors[sampleId];
+				if (++(h_rays[i].samples) < ns)
 				{
-					h_sample_colors[h_ray_sample_ids[i]] = vec3(1, 1, 1);
+					h_sample_colors[sampleId] = vec3(1, 1, 1);
 					// then, generate a new sample
-					const unsigned int x = i % nx;
-					const unsigned int y = ny - 1 - (i / nx);
+					const unsigned int x = sampleId % nx;
+					const unsigned int y = ny - 1 - (sampleId / nx);
 					generate_ray(cam, h_rays[ray_idx], x, y, nx, ny);
+					h_rays[ray_idx].depth = 0;
+					h_rays[ray_idx].samples = h_rays[i].samples;
+
+					h_ray_sample_ids[ray_idx] = sampleId;
 					++ray_idx;
 				}
 			}
