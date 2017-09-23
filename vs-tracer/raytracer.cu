@@ -17,16 +17,6 @@ char buffer[100];
 
 using namespace std;
 
-struct cu_sphere {
-	float3 center;
-	float radius;
-};
-
-struct cu_ray {
-	float3 origin;
-	float3 direction;
-};
-
 struct cu_hit {
 	int hit_idx;
 	float hit_t;
@@ -79,22 +69,20 @@ init_cu_scene(const hitable_list* world)
 	return scene;
 }
 
+inline void generate_ray(const camera* cam, cu_ray& r, const unsigned int x, const unsigned int y, const unsigned int nx, const unsigned int ny)
+{
+	float u = float(x + drand48()) / float(nx);
+	float v = float(y + drand48()) / float(ny);
+	cam->get_ray(u, v, r);
+}
+
 cu_ray*
 generate_rays(const camera* cam, cu_ray* rays, const unsigned int nx, const unsigned int ny)
 {
 	unsigned int ray_idx = 0;
-	ray r;
     for (int j = ny-1; j >= 0; j--)
-    {
 		for (int i = 0; i < nx; ++i, ++ray_idx)
-		{
-			float u = float(i + drand48()) / float(nx);
-			float v = float(j + drand48()) / float(ny);
-			cam->get_ray(u, v, r);
-			rays[ray_idx].origin = make_float3(r.A.x(), r.A.y(), r.A.z());
-			rays[ray_idx].direction = make_float3(r.B.x(), r.B.y(), r.B.z());
-		}
-    }
+			generate_ray(cam, rays[ray_idx], i, j, nx, ny);
 
     return rays;
 }
@@ -208,18 +196,18 @@ main(void)
 	const int nx = 600;
 	const int ny = 300;
 	const int ns = 100;
-	int max_depth = 50;
+	const int max_depth = 50;
     const hitable_list *world = random_scene();
 
 	cu_sphere *h_scene = init_cu_scene(world);
     const camera *cam = init_camera(nx, ny);
     const unsigned int all_rays = nx*ny;
-	cu_ray *h_rays = new cu_ray[all_rays]; //(cu_ray*) malloc(all_rays*sizeof(cu_ray));
-	vec3 *h_colors = new vec3[all_rays]; //(vec3**) malloc(all_rays*sizeof(vec3*));
-	unsigned int *h_ray_sample_ids = new unsigned int[all_rays]; //(unsigned int *) malloc(all_rays*sizeof(unsigned int));
-	vec3 *h_sample_colors = new vec3[all_rays]; //(vec3**) malloc(all_rays* sizeof(vec3*));
+	cu_ray *h_rays = new cu_ray[all_rays];
+	vec3 *h_colors = new vec3[all_rays];
+	unsigned int *h_ray_sample_ids = new unsigned int[all_rays];
+	vec3 *h_sample_colors = new vec3[all_rays];
 
-	cu_hit *h_hits = new cu_hit[all_rays]; //(cu_hit*) malloc(all_rays*sizeof(cu_hit));
+	cu_hit *h_hits = new cu_hit[all_rays];
 
     // allocate device memory for input
     cu_sphere *d_scene = NULL;
@@ -239,72 +227,85 @@ main(void)
 	clock_t generate = 0;
 	clock_t compact = 0;
 	clock_t cumul = 0;
-    for (unsigned int s = 0; s < ns; ++s)
-    {
-		if (s % 10 == 0)
+
+	// set temporary variables
+	for (int i = 0; i < all_rays; i++)
+	{
+		h_sample_colors[i] = vec3(1, 1, 1);
+		h_ray_sample_ids[i] = i;
+	}
+
+	// generate initial samples: one per pixel
+	clock_t start = clock();
+	generate_rays(cam, h_rays, nx, ny);
+	generate += clock() - start;
+	
+	unsigned int num_rays = all_rays;
+	unsigned int iteration = 0;
+	while (num_rays > 0)
+	{
+		if (iteration % 100 == 0)
 		{
-			cout << "sample " << s << "/" << ns << "\r";
+			//cout << "iteration " << iteration << "(" << num_rays << " rays)\n";
+			cout << "iteration " << iteration << "\r";
 			cout.flush();
 		}
 
-		// reset temporary variables
-		//cout << "reset vars\n";
-        for (int i = 0; i < all_rays; i++)
-        {
-			h_sample_colors[i] = vec3(1, 1, 1);
-        	h_ray_sample_ids[i] = i;
-        }
-
-		//cout << "generate rays\n";
+		// compute ray-world intersections
+		cudaProfilerStart();
 		clock_t start = clock();
-        generate_rays(cam, h_rays, nx, ny);
-		generate += clock() - start;
+		// copying rays to device
+		err(cudaMemcpy(d_rays, h_rays, num_rays * sizeof(cu_ray), cudaMemcpyHostToDevice), "copy rays from host to device");
 
-        // compute ray-world intersections
-        unsigned int depth = 0;
-        unsigned int num_rays = all_rays;
-        while (depth < max_depth && num_rays > 0)
-        {
-			cudaProfilerStart();
-			clock_t start = clock();
-			//cout << "copying rays to device...";
-			err(cudaMemcpy(d_rays, h_rays, num_rays * sizeof(cu_ray), cudaMemcpyHostToDevice), "copy rays from host to device");
-			//cout << "done\n";
+		// Launch the CUDA Kernel
+		int threadsPerBlock = 128;
+		int blocksPerGrid = (num_rays + threadsPerBlock - 1) / threadsPerBlock;
+		hit_scene << <blocksPerGrid, threadsPerBlock >> >(d_rays, num_rays, d_scene, scene_size, 0.001, FLT_MAX, d_hits);
+		err(cudaGetLastError(), "launch kernel");
+		
+		// Copy the results to host
+		err(cudaMemcpy(h_hits, d_hits, num_rays * sizeof(cu_hit), cudaMemcpyDeviceToHost), "copy results from device to host");
+		kernel += clock() - start;
+		cudaProfilerStop();
 
-            // Launch the CUDA Kernel
-            int threadsPerBlock = 128;
-            int blocksPerGrid =(num_rays + threadsPerBlock - 1) / threadsPerBlock;
-			//cout << "launching kernel...";
-            hit_scene<<<blocksPerGrid, threadsPerBlock>>>(d_rays, num_rays, d_scene, scene_size, 0.001, FLT_MAX, d_hits);
-			err(cudaGetLastError(), "launch kernel");
-			//cout << "done\n";
-            // Copy the device result in device memory to the host result vector
-			err(cudaMemcpy(h_hits, d_hits, num_rays * sizeof(cu_hit), cudaMemcpyDeviceToHost), "copy results from device to host");
-			kernel += clock() - start;
-			cudaProfilerStop();
-
-            // compact active rays
-			start = clock();
-        	unsigned int ray_idx = 0;
-            for (unsigned int i = 0; i < num_rays; ++i)
-            {
-            		if (color(h_ray_sample_ids[i], h_rays[i], h_hits[i], world, h_sample_colors[h_ray_sample_ids[i]], h_rays[ray_idx]))
-            		{
-            			h_ray_sample_ids[ray_idx] = h_ray_sample_ids[i];
-            			++ray_idx;
-            		}
-            }
-			compact += clock() - start;
-            num_rays = ray_idx;
-            ++depth;
-        }
-
-        // cumulate sample colors
+		// compact active rays
+		// whenever a rays becomes inactive, generate another sample until we hit spp limit
 		start = clock();
-        for (unsigned int i = 0; i < all_rays; ++i)
-        		h_colors[i] += h_sample_colors[i];
-		cumul += clock() - start;
-    }
+		unsigned int ray_idx = 0;
+		for (unsigned int i = 0; i < num_rays; ++i)
+		{
+			bool active = false;
+			if (color(h_ray_sample_ids[i], h_rays[i], h_hits[i], world, h_sample_colors[h_ray_sample_ids[i]], h_rays[ray_idx]))
+			{
+				// ray still active if it didn't reach max_depth yet
+				active = ++(h_rays[ray_idx].depth) < max_depth;
+			}
+
+			if (active)
+			{
+				h_ray_sample_ids[ray_idx] = h_ray_sample_ids[i];
+				++ray_idx;
+			}
+			else
+			{
+				// ray is no longe active, first cumulate its color
+				h_colors[i] += h_sample_colors[h_ray_sample_ids[i]];
+				if (++(h_rays[ray_idx].samples) < ns)
+				{
+					h_sample_colors[h_ray_sample_ids[i]] = vec3(1, 1, 1);
+					// then, generate a new sample
+					const unsigned int x = i % nx;
+					const unsigned int y = ny - 1 - (i / nx);
+					generate_ray(cam, h_rays[ray_idx], x, y, nx, ny);
+					++ray_idx;
+				}
+			}
+		}
+		compact += clock() - start;
+		num_rays = ray_idx;
+
+		++iteration;
+	}
 
     clock_t end = clock();
     printf("rendering duration %.2f seconds\nkernel %.2f seconds\ngenerate %.2f seconds\ncompact %.2f seconds\ncumul %.2f seconds\n", 

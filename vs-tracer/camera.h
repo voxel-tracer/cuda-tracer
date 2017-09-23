@@ -28,6 +28,14 @@ public:
 		r.B = lower_left_corner + s*horizontal + t*vertical - origin - offset;
 	}
 
+	void get_ray(float s, float t, cu_ray& r) const {
+		vec3 rd = lens_radius*random_in_unit_disk();
+		vec3 offset = u*rd.x() + v*rd.y();
+
+		r.origin = (origin + offset).to_float3();
+		r.direction = (lower_left_corner + s*horizontal + t*vertical - origin - offset).to_float3();
+	}
+
 	vec3 origin;
 	vec3 lower_left_corner;
 	vec3 horizontal;

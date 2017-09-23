@@ -33,6 +33,9 @@ bool sphere::hit(const ray& r, float t_min, float t_max, hit_record& rec) const 
 	return false;
 }
 
-
+struct cu_sphere {
+	float3 center;
+	float radius;
+};
 
 #endif /* SPHERE_H_ */

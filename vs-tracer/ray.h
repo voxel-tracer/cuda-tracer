@@ -15,4 +15,11 @@ public:
 	vec3 B;
 };
 
+struct cu_ray {
+	float3 origin;
+	float3 direction;
+	unsigned int samples;
+	unsigned int depth;
+};
+
 #endif /* RAY_H_ */
