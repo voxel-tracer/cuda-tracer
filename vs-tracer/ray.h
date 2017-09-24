@@ -18,7 +18,7 @@ public:
 struct cu_ray {
 	float3 origin;
 	float3 direction;
-	unsigned int samples;
+	unsigned int pixelId;
 	unsigned int depth;
 };
 

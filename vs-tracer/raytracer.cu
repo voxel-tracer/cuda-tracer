@@ -22,6 +22,14 @@ struct cu_hit {
 	float hit_t;
 };
 
+struct pixel {
+	//TODO pixel should know it's coordinates and it's id should be a computed field
+	unsigned int id;
+	unsigned int samples;
+
+	pixel() { id = 0; samples = 0; }
+};
+
 hitable_list *random_scene()
 {
     int n = 500;
@@ -74,6 +82,8 @@ inline void generate_ray(const camera* cam, cu_ray& r, const unsigned int x, con
 	float u = float(x + drand48()) / float(nx);
 	float v = float(y + drand48()) / float(ny);
 	cam->get_ray(u, v, r);
+	r.depth = 0;
+	r.pixelId = (ny - y - 1)*nx + x;
 }
 
 cu_ray*
@@ -164,8 +174,6 @@ bool color(const unsigned int sample_id, cu_ray& cu_r, const cu_hit& hit, const 
 	if ((++cu_r.depth) <= max_depth && scatter(*rec.mat_ptr, r, rec, attenuation, r)) {
 		scattered.origin = r.origin().to_float3();
 		scattered.direction = r.direction().to_float3();
-		scattered.depth = cu_r.depth;
-		scattered.samples = cu_r.samples;
 
 		sample_clr *= attenuation;
 //		if (sample_id == DBG_ID) printf("scatter: %s\n", sample_clr.to_string(buffer));
@@ -185,11 +193,11 @@ void err(cudaError_t err, char *msg)
 		exit(EXIT_FAILURE);
 	}
 }
+
 /**
  * Host main routine
  */
-int
-main(void)
+int main(void)
 {
 	const unsigned int scene_size = 500;
 
@@ -197,29 +205,29 @@ main(void)
 
 	const int nx = 600;
 	const int ny = 300;
-	const int ns = 1000;
+	const int ns = 100;
 	const int max_depth = 50;
     const hitable_list *world = random_scene();
 
 	cu_sphere *h_scene = init_cu_scene(world);
     const camera *cam = init_camera(nx, ny);
-    const unsigned int all_rays = nx*ny;
-	cu_ray *h_rays = new cu_ray[all_rays];
-	vec3 *h_colors = new vec3[all_rays];
-	unsigned int *h_ray_sample_ids = new unsigned int[all_rays];
-	vec3 *h_sample_colors = new vec3[all_rays];
+    const unsigned int num_pixels = nx*ny;
+	pixel *pixels = new pixel[num_pixels];
+	cu_ray *h_rays = new cu_ray[num_pixels];
+	vec3 *h_colors = new vec3[num_pixels];
+	vec3 *h_sample_colors = new vec3[num_pixels];
 
-	cu_hit *h_hits = new cu_hit[all_rays];
+	cu_hit *h_hits = new cu_hit[num_pixels];
 
     // allocate device memory for input
     cu_sphere *d_scene = NULL;
 	err(cudaMalloc((void **)&d_scene, scene_size * sizeof(cu_sphere)), "allocate device d_scene");
 
     cu_ray *d_rays = NULL;
-	err(cudaMalloc((void **)&d_rays, all_rays * sizeof(cu_ray)), "allocate device d_rays");
+	err(cudaMalloc((void **)&d_rays, num_pixels * sizeof(cu_ray)), "allocate device d_rays");
 
     cu_hit *d_hits = NULL;
-	err(cudaMalloc((void **)&d_hits, all_rays * sizeof(cu_hit)), "allocate device d_hits");
+	err(cudaMalloc((void **)&d_hits, num_pixels * sizeof(cu_hit)), "allocate device d_hits");
 
     // Copy the host input in host memory to the device input in device memory
 	err(cudaMemcpy(d_scene, h_scene, world->list_size * sizeof(cu_sphere), cudaMemcpyHostToDevice), "copy scene from host to device");
@@ -231,10 +239,10 @@ main(void)
 	clock_t cumul = 0;
 
 	// set temporary variables
-	for (int i = 0; i < all_rays; i++)
+	for (int i = 0; i < num_pixels; i++)
 	{
 		h_sample_colors[i] = vec3(1, 1, 1);
-		h_ray_sample_ids[i] = i;
+		pixels[i].id = i;
 	}
 
 	// generate initial samples: one per pixel
@@ -242,16 +250,16 @@ main(void)
 	generate_rays(cam, h_rays, nx, ny);
 	generate += clock() - start;
 	
-	unsigned int num_rays = all_rays;
+	unsigned int num_rays = num_pixels;
 	unsigned int iteration = 0;
 	while (num_rays > 0)
 	{
-		if (iteration % 100 == 0)
-		{
-			//cout << "iteration " << iteration << "(" << num_rays << " rays)\n";
-			//cout << "iteration " << iteration << "\r";
-			cout.flush();
-		}
+		//if (iteration % 100 == 0)
+		//{
+		//	//cout << "iteration " << iteration << "(" << num_rays << " rays)\n";
+		//	cout << "iteration " << iteration << "\r";
+		//	cout.flush();
+		//}
 
 		// compute ray-world intersections
 		cudaProfilerStart();
@@ -262,7 +270,7 @@ main(void)
 		// Launch the CUDA Kernel
 		int threadsPerBlock = 128;
 		int blocksPerGrid = (num_rays + threadsPerBlock - 1) / threadsPerBlock;
-		hit_scene << <blocksPerGrid, threadsPerBlock >> >(d_rays, num_rays, d_scene, scene_size, 0.001, FLT_MAX, d_hits);
+		hit_scene <<<blocksPerGrid, threadsPerBlock>>>(d_rays, num_rays, d_scene, scene_size, 0.001, FLT_MAX, d_hits);
 		err(cudaGetLastError(), "launch kernel");
 		
 		// Copy the results to host
@@ -276,27 +284,24 @@ main(void)
 		unsigned int ray_idx = 0;
 		for (unsigned int i = 0; i < num_rays; ++i)
 		{
-			const unsigned int sampleId = h_ray_sample_ids[i];
-			if (color(sampleId, h_rays[i], h_hits[i], world, h_sample_colors[sampleId], max_depth, h_rays[ray_idx]))
+			const unsigned int pixelId = h_rays[i].pixelId;
+			if (color(pixelId, h_rays[i], h_hits[i], world, h_sample_colors[pixelId], max_depth, h_rays[ray_idx]))
 			{
-				h_ray_sample_ids[ray_idx] = sampleId;
+				h_rays[ray_idx].pixelId = pixelId;
+				h_rays[ray_idx].depth = h_rays[i].depth;
 				++ray_idx;
 			}
 			else
 			{
 				// ray is no longer active, first cumulate its color
-				h_colors[sampleId] += h_sample_colors[sampleId];
-				if (++(h_rays[i].samples) < ns)
+				h_colors[pixelId] += h_sample_colors[pixelId];
+				if (++(pixels[pixelId].samples) < ns)
 				{
-					h_sample_colors[sampleId] = vec3(1, 1, 1);
+					h_sample_colors[pixelId] = vec3(1, 1, 1);
 					// then, generate a new sample
-					const unsigned int x = sampleId % nx;
-					const unsigned int y = ny - 1 - (sampleId / nx);
+					const unsigned int x = pixelId % nx;
+					const unsigned int y = ny - 1 - (pixelId / nx);
 					generate_ray(cam, h_rays[ray_idx], x, y, nx, ny);
-					h_rays[ray_idx].depth = 0;
-					h_rays[ray_idx].samples = h_rays[i].samples;
-
-					h_ray_sample_ids[ray_idx] = sampleId;
 					++ray_idx;
 				}
 			}
