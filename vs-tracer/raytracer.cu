@@ -115,9 +115,9 @@ hit_scene(const cu_ray* rays, const unsigned int num_rays, const cu_sphere* scen
     if (i >= num_rays)
     	return;
 
-    const cu_ray r = rays[i];
-    const float3 ro = r.origin;
-    const float3 rd = r.direction;
+    const cu_ray *r = &(rays[i]);
+    const float3 ro = r->origin;
+    const float3 rd = r->direction;
 
     float closest_hit = t_max;
     int hit_idx = -1;
@@ -151,7 +151,7 @@ hit_scene(const cu_ray* rays, const unsigned int num_rays, const cu_sphere* scen
 //    if (i == DBG_ID) printf("hit_scene: hit_idx = %d, hit_t = %.2f\n", hit_idx, closest_hit);
 }
 
-bool color(const unsigned int sample_id, cu_ray& cu_r, const cu_hit& hit, const hitable_list *world, vec3& sample_clr, const unsigned int max_depth, cu_ray& scattered) {
+bool color(cu_ray& cu_r, const cu_hit& hit, const hitable_list *world, vec3& sample_clr, const unsigned int max_depth) {
 	ray r = ray(vec3(cu_r.origin), vec3(cu_r.direction));
 
 	if (hit.hit_idx == -1) {
@@ -172,8 +172,8 @@ bool color(const unsigned int sample_id, cu_ray& cu_r, const cu_hit& hit, const 
 
 	vec3 attenuation;
 	if ((++cu_r.depth) <= max_depth && scatter(*rec.mat_ptr, r, rec, attenuation, r)) {
-		scattered.origin = r.origin().to_float3();
-		scattered.direction = r.direction().to_float3();
+		cu_r.origin = r.origin().to_float3();
+		cu_r.direction = r.direction().to_float3();
 
 		sample_clr *= attenuation;
 //		if (sample_id == DBG_ID) printf("scatter: %s\n", sample_clr.to_string(buffer));
@@ -285,10 +285,9 @@ int main(void)
 		for (unsigned int i = 0; i < num_rays; ++i)
 		{
 			const unsigned int pixelId = h_rays[i].pixelId;
-			if (color(pixelId, h_rays[i], h_hits[i], world, h_sample_colors[pixelId], max_depth, h_rays[ray_idx]))
+			if (color(h_rays[i], h_hits[i], world, h_sample_colors[pixelId], max_depth))
 			{
-				h_rays[ray_idx].pixelId = pixelId;
-				h_rays[ray_idx].depth = h_rays[i].depth;
+				h_rays[ray_idx] = h_rays[i];
 				++ray_idx;
 			}
 			else

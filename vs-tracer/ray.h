@@ -20,6 +20,9 @@ struct cu_ray {
 	float3 direction;
 	unsigned int pixelId;
 	unsigned int depth;
+
+	cu_ray() {}
+	cu_ray(cu_ray& r) { origin = r.origin; direction = r.direction; pixelId = r.pixelId; depth = r.depth; }
 };
 
 #endif /* RAY_H_ */
