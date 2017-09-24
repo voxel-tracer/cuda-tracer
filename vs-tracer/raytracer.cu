@@ -30,6 +30,14 @@ struct pixel {
 	pixel() { id = 0; samples = 0; }
 };
 
+class pixel_compare {
+public:
+	bool operator() (pixel p0, pixel p1)
+	{
+		return p0.samples < p1.samples;
+	}
+};
+
 hitable_list *random_scene()
 {
     int n = 500;
@@ -212,7 +220,7 @@ int main(void)
 	cu_sphere *h_scene = init_cu_scene(world);
     const camera *cam = init_camera(nx, ny);
     const unsigned int num_pixels = nx*ny;
-	pixel *pixels = new pixel[num_pixels];
+	pixel* pixels = new pixel[num_pixels];
 	cu_ray *h_rays = new cu_ray[num_pixels];
 	vec3 *h_colors = new vec3[num_pixels];
 	vec3 *h_sample_colors = new vec3[num_pixels];
@@ -236,13 +244,13 @@ int main(void)
 	clock_t kernel = 0;
 	clock_t generate = 0;
 	clock_t compact = 0;
-	clock_t cumul = 0;
 
 	// set temporary variables
 	for (int i = 0; i < num_pixels; i++)
 	{
 		h_sample_colors[i] = vec3(1, 1, 1);
 		pixels[i].id = i;
+		pixels[i].samples = 1; // we initially generate one ray per pixel
 	}
 
 	// generate initial samples: one per pixel
@@ -254,10 +262,15 @@ int main(void)
 	unsigned int iteration = 0;
 	while (num_rays > 0)
 	{
-		//if (iteration % 100 == 0)
+		//if (iteration % 10 == 0)
 		//{
-		//	//cout << "iteration " << iteration << "(" << num_rays << " rays)\n";
-		//	cout << "iteration " << iteration << "\r";
+		//	cout << (double(clock() - begin) / CLOCKS_PER_SEC) << "s, iteration " << iteration << "(" << num_rays << " rays)\n";
+		//	//cout << "iteration " << iteration << "\r";
+		//	cout.flush();
+		//}
+		//if (num_rays < num_pixels)
+		//{
+		//	cout << "iteration " << iteration << "(" << num_rays << " rays)\n";
 		//	cout.flush();
 		//}
 
@@ -279,32 +292,47 @@ int main(void)
 		cudaProfilerStop();
 
 		// compact active rays
-		// whenever a rays becomes inactive, generate another sample until we hit spp limit
 		start = clock();
+		// first step only generate scattered rays and compact them
 		unsigned int ray_idx = 0;
 		for (unsigned int i = 0; i < num_rays; ++i)
 		{
 			const unsigned int pixelId = h_rays[i].pixelId;
-			if (color(h_rays[i], h_hits[i], world, h_sample_colors[pixelId], max_depth))
+			if (color(h_rays[i], h_hits[i], world, h_sample_colors[i], max_depth))
 			{
+				// compact ray
 				h_rays[ray_idx] = h_rays[i];
+				h_sample_colors[ray_idx] = h_sample_colors[i];
 				++ray_idx;
 			}
 			else
 			{
-				// ray is no longer active, first cumulate its color
-				h_colors[pixelId] += h_sample_colors[pixelId];
-				if (++(pixels[pixelId].samples) < ns)
+				// ray is no longer active, cumulate its color
+				h_colors[pixelId] += h_sample_colors[i];
+
+			}
+		}
+		// for each ray that's no longer active, sample a pixel that's not fully sampled yet
+		unsigned int sampled = 0;
+		do
+		{
+			sampled = 0;
+			for (unsigned int i = 0; i < num_pixels && ray_idx < num_pixels; ++i)
+			{
+				const unsigned int pixelId = pixels[i].id;
+				if (pixels[i].samples < ns)
 				{
-					h_sample_colors[pixelId] = vec3(1, 1, 1);
+					pixels[i].samples++;
 					// then, generate a new sample
 					const unsigned int x = pixelId % nx;
 					const unsigned int y = ny - 1 - (pixelId / nx);
 					generate_ray(cam, h_rays[ray_idx], x, y, nx, ny);
+					h_sample_colors[ray_idx] = vec3(1, 1, 1);
 					++ray_idx;
+					++sampled;
 				}
 			}
-		}
+		} while (ray_idx < num_pixels && sampled > 0);
 		compact += clock() - start;
 		num_rays = ray_idx;
 
@@ -312,12 +340,11 @@ int main(void)
 	}
 
     clock_t end = clock();
-    printf("rendering duration %.2f seconds\nkernel %.2f seconds\ngenerate %.2f seconds\ncompact %.2f seconds\ncumul %.2f seconds\n", 
-		double(end - begin) / CLOCKS_PER_SEC, 
+	printf("rendering duration %.2f seconds\nkernel %.2f seconds\ngenerate %.2f seconds\ncompact %.2f seconds\n",
+		double(end - begin) / CLOCKS_PER_SEC,
 		double(kernel) / CLOCKS_PER_SEC,
 		double(generate) / CLOCKS_PER_SEC,
-		double(compact) / CLOCKS_PER_SEC,
-		double(cumul) / CLOCKS_PER_SEC);
+		double(compact) / CLOCKS_PER_SEC);
 
     // Free device global memory
 	err(cudaFree(d_scene), "free device d_scene");
