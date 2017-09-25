@@ -213,7 +213,7 @@ int main(void)
 
 	const int nx = 600;
 	const int ny = 300;
-	const int ns = 100;
+	const int ns = 1000;
 	const int max_depth = 50;
     const hitable_list *world = random_scene();
 
@@ -262,12 +262,12 @@ int main(void)
 	unsigned int iteration = 0;
 	while (num_rays > 0)
 	{
-		//if (iteration % 10 == 0)
-		//{
-		//	cout << (double(clock() - begin) / CLOCKS_PER_SEC) << "s, iteration " << iteration << "(" << num_rays << " rays)\n";
-		//	//cout << "iteration " << iteration << "\r";
-		//	cout.flush();
-		//}
+		if (iteration % 100 == 0)
+		{
+			//cout << (double(clock() - begin) / CLOCKS_PER_SEC) << "s, iteration " << iteration << "(" << num_rays << " rays)\n";
+			cout << "iteration " << iteration << "(" << num_rays << " rays)\r";
+			cout.flush();
+		}
 		//if (num_rays < num_pixels)
 		//{
 		//	cout << "iteration " << iteration << "(" << num_rays << " rays)\n";
@@ -312,7 +312,9 @@ int main(void)
 
 			}
 		}
+		compact += clock() - start;
 		// for each ray that's no longer active, sample a pixel that's not fully sampled yet
+		start = clock();
 		unsigned int sampled = 0;
 		do
 		{
@@ -333,7 +335,7 @@ int main(void)
 				}
 			}
 		} while (ray_idx < num_pixels && sampled > 0);
-		compact += clock() - start;
+		generate += clock() - start;
 		num_rays = ray_idx;
 
 		++iteration;
