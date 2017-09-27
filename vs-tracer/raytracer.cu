@@ -15,6 +15,10 @@
 //#define DBG_ID (150*600+300)
 char buffer[100];
 
+clock_t kernel = 0;
+clock_t generate = 0;
+clock_t compact = 0;
+
 using namespace std;
 
 struct cu_hit {
@@ -202,6 +206,73 @@ void err(cudaError_t err, char *msg)
 	}
 }
 
+void run_kernel(cu_ray* h_rays, cu_ray* d_rays, const unsigned int num_rays, cu_hit* h_hits, cu_hit* d_hits, cu_sphere* d_scene, unsigned int scene_size)
+{
+	// copying rays to device
+	err(cudaMemcpy(d_rays, h_rays, num_rays * sizeof(cu_ray), cudaMemcpyHostToDevice), "copy rays from host to device");
+
+	// Launch the CUDA Kernel
+	int threadsPerBlock = 128;
+	int blocksPerGrid = (num_rays + threadsPerBlock - 1) / threadsPerBlock;
+	hit_scene << <blocksPerGrid, threadsPerBlock >> >(d_rays, num_rays, d_scene, scene_size, 0.001, FLT_MAX, d_hits);
+	err(cudaGetLastError(), "launch kernel");
+
+	// Copy the results to host
+	err(cudaMemcpy(h_hits, d_hits, num_rays * sizeof(cu_hit), cudaMemcpyDeviceToHost), "copy results from device to host");
+}
+
+unsigned int compact_rays(cu_ray* h_rays, unsigned int num_rays, cu_hit* h_hits, const hitable_list* world, vec3* h_sample_colors, vec3* h_colors, 
+	pixel* pixels, unsigned int num_pixels, const camera* cam, unsigned int nx, unsigned int ny, unsigned int ns)
+{
+	const int max_depth = 50;
+	const float min_attenuation = 0.01;
+
+	// first step only generate scattered rays and compact them
+	clock_t start = clock();
+	unsigned int ray_idx = 0;
+	for (unsigned int i = 0; i < num_rays; ++i)
+	{
+		const unsigned int pixelId = h_rays[i].pixelId;
+		if (color(h_rays[i], h_hits[i], world, h_sample_colors[i], max_depth) && h_sample_colors[i].squared_length() > min_attenuation)
+		{
+			// compact ray
+			h_rays[ray_idx] = h_rays[i];
+			h_sample_colors[ray_idx] = h_sample_colors[i];
+			++ray_idx;
+		}
+		else
+		{
+			// ray is no longer active, cumulate its color
+			h_colors[pixelId] += h_sample_colors[i];
+
+		}
+	}
+	compact += clock() - start;
+	// for each ray that's no longer active, sample a pixel that's not fully sampled yet
+	start = clock();
+	unsigned int sampled = 0;
+	do
+	{
+		sampled = 0;
+		for (unsigned int i = 0; i < num_pixels && ray_idx < num_pixels; ++i)
+		{
+			const unsigned int pixelId = pixels[i].id;
+			if (pixels[i].samples < ns)
+			{
+				pixels[i].samples++;
+				// then, generate a new sample
+				const unsigned int x = pixelId % nx;
+				const unsigned int y = ny - 1 - (pixelId / nx);
+				generate_ray(cam, h_rays[ray_idx], x, y, nx, ny);
+				h_sample_colors[ray_idx] = vec3(1, 1, 1);
+				++ray_idx;
+				++sampled;
+			}
+		}
+	} while (ray_idx < num_pixels && sampled > 0);
+	generate += clock() - start;
+	return ray_idx;
+}
 /**
  * Host main routine
  */
@@ -214,8 +285,6 @@ int main(void)
 	const int nx = 600;
 	const int ny = 300;
 	const int ns = 1000;
-	const int max_depth = 50;
-	const float min_attenuation = 0.01;
 	const hitable_list *world = random_scene();
 
 	cu_sphere *h_scene = init_cu_scene(world);
@@ -242,9 +311,6 @@ int main(void)
 	err(cudaMemcpy(d_scene, h_scene, world->list_size * sizeof(cu_sphere), cudaMemcpyHostToDevice), "copy scene from host to device");
 
     clock_t begin = clock();
-	clock_t kernel = 0;
-	clock_t generate = 0;
-	clock_t compact = 0;
 
 	// set temporary variables
 	for (int i = 0; i < num_pixels; i++)
@@ -280,66 +346,12 @@ int main(void)
 		// compute ray-world intersections
 		cudaProfilerStart();
 		clock_t start = clock();
-		// copying rays to device
-		err(cudaMemcpy(d_rays, h_rays, num_rays * sizeof(cu_ray), cudaMemcpyHostToDevice), "copy rays from host to device");
-
-		// Launch the CUDA Kernel
-		int threadsPerBlock = 128;
-		int blocksPerGrid = (num_rays + threadsPerBlock - 1) / threadsPerBlock;
-		hit_scene <<<blocksPerGrid, threadsPerBlock>>>(d_rays, num_rays, d_scene, scene_size, 0.001, FLT_MAX, d_hits);
-		err(cudaGetLastError(), "launch kernel");
-		
-		// Copy the results to host
-		err(cudaMemcpy(h_hits, d_hits, num_rays * sizeof(cu_hit), cudaMemcpyDeviceToHost), "copy results from device to host");
+		run_kernel(h_rays, d_rays, num_rays, h_hits, d_hits, d_scene, scene_size);
 		kernel += clock() - start;
 		cudaProfilerStop();
 
 		// compact active rays
-		start = clock();
-		// first step only generate scattered rays and compact them
-		unsigned int ray_idx = 0;
-		for (unsigned int i = 0; i < num_rays; ++i)
-		{
-			const unsigned int pixelId = h_rays[i].pixelId;
-			if (color(h_rays[i], h_hits[i], world, h_sample_colors[i], max_depth) && h_sample_colors[i].squared_length() > min_attenuation)
-			{
-				// compact ray
-				h_rays[ray_idx] = h_rays[i];
-				h_sample_colors[ray_idx] = h_sample_colors[i];
-				++ray_idx;
-			}
-			else
-			{
-				// ray is no longer active, cumulate its color
-				h_colors[pixelId] += h_sample_colors[i];
-
-			}
-		}
-		compact += clock() - start;
-		// for each ray that's no longer active, sample a pixel that's not fully sampled yet
-		start = clock();
-		unsigned int sampled = 0;
-		do
-		{
-			sampled = 0;
-			for (unsigned int i = 0; i < num_pixels && ray_idx < num_pixels; ++i)
-			{
-				const unsigned int pixelId = pixels[i].id;
-				if (pixels[i].samples < ns)
-				{
-					pixels[i].samples++;
-					// then, generate a new sample
-					const unsigned int x = pixelId % nx;
-					const unsigned int y = ny - 1 - (pixelId / nx);
-					generate_ray(cam, h_rays[ray_idx], x, y, nx, ny);
-					h_sample_colors[ray_idx] = vec3(1, 1, 1);
-					++ray_idx;
-					++sampled;
-				}
-			}
-		} while (ray_idx < num_pixels && sampled > 0);
-		generate += clock() - start;
-		num_rays = ray_idx;
+		num_rays = compact_rays(h_rays, num_rays, h_hits, world, h_sample_colors, h_colors, pixels, num_pixels, cam, nx, ny, ns);
 
 		++iteration;
 	}
