@@ -215,7 +215,8 @@ int main(void)
 	const int ny = 300;
 	const int ns = 1000;
 	const int max_depth = 50;
-    const hitable_list *world = random_scene();
+	const float min_attenuation = 0.01;
+	const hitable_list *world = random_scene();
 
 	cu_sphere *h_scene = init_cu_scene(world);
     const camera *cam = init_camera(nx, ny);
@@ -260,11 +261,13 @@ int main(void)
 	
 	unsigned int num_rays = num_pixels;
 	unsigned int iteration = 0;
+	unsigned int total_rays = 0;
 	while (num_rays > 0)
 	{
+		total_rays += num_rays;
 		if (iteration % 100 == 0)
 		{
-			//cout << (double(clock() - begin) / CLOCKS_PER_SEC) << "s, iteration " << iteration << "(" << num_rays << " rays)\n";
+			//cout << "iteration " << iteration << "(" << num_rays << " rays)\n";
 			cout << "iteration " << iteration << "(" << num_rays << " rays)\r";
 			cout.flush();
 		}
@@ -298,7 +301,7 @@ int main(void)
 		for (unsigned int i = 0; i < num_rays; ++i)
 		{
 			const unsigned int pixelId = h_rays[i].pixelId;
-			if (color(h_rays[i], h_hits[i], world, h_sample_colors[i], max_depth))
+			if (color(h_rays[i], h_hits[i], world, h_sample_colors[i], max_depth) && h_sample_colors[i].squared_length() > min_attenuation)
 			{
 				// compact ray
 				h_rays[ray_idx] = h_rays[i];
@@ -342,7 +345,8 @@ int main(void)
 	}
 
     clock_t end = clock();
-	printf("rendering duration %.2f seconds\nkernel %.2f seconds\ngenerate %.2f seconds\ncompact %.2f seconds\n",
+	printf("rendering %d rays, duration %.2f seconds\nkernel %.2f seconds\ngenerate %.2f seconds\ncompact %.2f seconds\n",
+		total_rays,
 		double(end - begin) / CLOCKS_PER_SEC,
 		double(kernel) / CLOCKS_PER_SEC,
 		double(generate) / CLOCKS_PER_SEC,
