@@ -2,6 +2,7 @@
 #include <float.h>
 #include <fstream>
 #include <ctime>
+#include <SDL.h>
 
 // For the CUDA runtime routines (prefixed with "cuda_")
 #include <cuda_runtime.h>
@@ -276,8 +277,13 @@ unsigned int compact_rays(cu_ray* h_rays, unsigned int num_rays, cu_hit* h_hits,
 /**
  * Host main routine
  */
-int main(void)
+int main(int argc, char** argv)
 {
+	bool quit = false;
+	SDL_Event event;
+
+	SDL_Init(SDL_INIT_VIDEO);
+
 	const unsigned int scene_size = 500;
 
 	printf("preparing renderer...\n");
@@ -309,6 +315,11 @@ int main(void)
 
     // Copy the host input in host memory to the device input in device memory
 	err(cudaMemcpy(d_scene, h_scene, world->list_size * sizeof(cu_sphere), cudaMemcpyHostToDevice), "copy scene from host to device");
+
+	SDL_Window* screen = SDL_CreateWindow("Voxel Tracer", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, nx, ny, 0);
+	SDL_Renderer* renderer = SDL_CreateRenderer(screen, -1, 0);
+	SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, nx, ny);
+	Uint32 * pix_array = new Uint32[nx * ny];
 
     clock_t begin = clock();
 
@@ -353,6 +364,27 @@ int main(void)
 		// compact active rays
 		num_rays = compact_rays(h_rays, num_rays, h_hits, world, h_sample_colors, h_colors, pixels, num_pixels, cam, nx, ny, ns);
 
+		// update pixels
+		{
+			unsigned int sample_idx = 0;
+			for (int j = ny - 1; j >= 0; j--)
+			{
+				for (int i = 0; i < nx; ++i, sample_idx++)
+				{
+					vec3 col = h_colors[sample_idx] / float(pixels[sample_idx].samples);
+					col = vec3(sqrtf(col[0]), sqrtf(col[1]), sqrtf(col[2]));
+					int ir = int(255.99*col.r());
+					int ig = int(255.99*col.g());
+					int ib = int(255.99*col.b());
+					pix_array[(ny - 1 - j)*nx + i] = (ir << 16) + (ig << 8) + ib;
+				}
+			}
+		}
+		SDL_UpdateTexture(texture, NULL, pix_array, nx * sizeof(Uint32));
+		SDL_RenderClear(renderer);
+		SDL_RenderCopy(renderer, texture, NULL, NULL);
+		SDL_RenderPresent(renderer);
+
 		++iteration;
 	}
 
@@ -364,6 +396,18 @@ int main(void)
 		double(generate) / CLOCKS_PER_SEC,
 		double(compact) / CLOCKS_PER_SEC);
 
+	while (!quit)
+	{
+		SDL_WaitEvent(&event);
+
+		switch (event.type)
+		{
+		case SDL_QUIT:
+			quit = true;
+			break;
+		}
+	}
+
     // Free device global memory
 	err(cudaFree(d_scene), "free device d_scene");
    	err(cudaFree(d_rays), "free device d_rays");
@@ -372,6 +416,11 @@ int main(void)
     // Free host memory
     free(h_scene);
     free(h_hits);
+
+	delete[] pix_array;
+	SDL_DestroyTexture(texture);
+	SDL_DestroyRenderer(renderer);
+	SDL_DestroyWindow(screen);
 
     // generate final image
     ofstream image;
