@@ -33,17 +33,19 @@ public:
 
 	unsigned int numpixels() const { return nx*ny; }
 	unsigned int numrays() const { return num_rays; }
+	unsigned int get_pixelId(int x, int y) { return (ny - y - 1)*nx + x; }
+	vec3 get_pixel_color(int x, int y) {
+		const unsigned int pixelId = get_pixelId(x, y);
+		if (pixels[pixelId].samples == 0) return vec3(0, 0, 0);
+		return h_colors[pixelId] / float(pixels[pixelId].samples);
+	}
+
 	void prepare_kernel();
 
 	bool color(cu_ray& cu_r, const cu_hit& hit, vec3& sample_clr);
 	cu_ray* generate_rays(cu_ray* rays);
 	void run_kernel();
 	void compact_rays();
-
-	vec3 pixel_color(int x, int y) {
-		unsigned int sample_idx = x + (ny - 1 - y)*nx;
-		return h_colors[sample_idx] / float(pixels[sample_idx].samples);
-	}
 
 	void destroy();
 
@@ -65,12 +67,14 @@ public:
 	pixel* pixels;
 	vec3* h_colors;
 	vec3* h_sample_colors;
+	unsigned int* pix_array;
 
 	clock_t kernel = 0;
 	clock_t generate = 0;
 	clock_t compact = 0;
 
 	unsigned int num_rays;
-
+private:
+	int* pixel_idx;
 };
 inline void generate_ray(const camera* cam, cu_ray& r, const unsigned int x, const unsigned int y, const unsigned int nx, const unsigned int ny);

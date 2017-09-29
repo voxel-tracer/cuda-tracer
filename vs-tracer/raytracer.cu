@@ -78,7 +78,7 @@ int main(int argc, char** argv)
 
 	const int nx = 600;
 	const int ny = 300;
-	const int ns = 100;
+	const int ns = 1000;
 	hitable_list *world = random_scene();
 
     camera *cam = init_camera(nx, ny);
@@ -87,7 +87,6 @@ int main(int argc, char** argv)
 	SDL_Window* screen = SDL_CreateWindow("Voxel Tracer", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, nx, ny, 0);
 	SDL_Renderer* renderer = SDL_CreateRenderer(screen, -1, 0);
 	SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, nx, ny);
-	Uint32 * pix_array = new Uint32[nx * ny];
 
     clock_t begin = clock();
 
@@ -95,7 +94,7 @@ int main(int argc, char** argv)
 	
 	unsigned int iteration = 0;
 	unsigned int total_rays = 0;
-	while (r.numrays() > 0)
+	while (!quit && r.numrays() > 0)
 	{
 		total_rays += r.numrays();
 		if (iteration % 100 == 0)
@@ -114,27 +113,23 @@ int main(int argc, char** argv)
 		// update pixels
 		if (iteration % 1 == 0)
 		{
-			unsigned int sample_idx = 0;
-			for (int j = ny - 1; j >= 0; j--)
-			{
-				for (int i = 0; i < nx; ++i, sample_idx++)
-				{
-					vec3 col = r.pixel_color(i, j);
-					col = vec3(sqrtf(col[0]), sqrtf(col[1]), sqrtf(col[2]));
-					int ir = int(255.99*col.r());
-					int ig = int(255.99*col.g());
-					int ib = int(255.99*col.b());
-					pix_array[(ny - 1 - j)*nx + i] = (ir << 16) + (ig << 8) + ib;
-				}
-			}
-
-			SDL_UpdateTexture(texture, NULL, pix_array, nx * sizeof(Uint32));
+			SDL_UpdateTexture(texture, NULL, r.pix_array, nx * sizeof(unsigned int));
 			SDL_RenderClear(renderer);
 			SDL_RenderCopy(renderer, texture, NULL, NULL);
 			SDL_RenderPresent(renderer);
 		}
 
 		++iteration;
+
+		//SDL_WaitEvent(&event);
+		while (SDL_PollEvent(&event)) {
+			switch (event.type)
+			{
+			case SDL_QUIT:
+				quit = true;
+				break;
+			}
+		}
 	}
 
     clock_t end = clock();
@@ -145,19 +140,18 @@ int main(int argc, char** argv)
 		double(r.generate) / CLOCKS_PER_SEC,
 		double(r.compact) / CLOCKS_PER_SEC);
 
-	while (!quit)
-	{
-		SDL_WaitEvent(&event);
+	//while (!quit)
+	//{
+	//	SDL_WaitEvent(&event);
 
-		switch (event.type)
-		{
-		case SDL_QUIT:
-			quit = true;
-			break;
-		}
-	}
+	//	switch (event.type)
+	//	{
+	//	case SDL_QUIT:
+	//		quit = true;
+	//		break;
+	//	}
+	//}
 
-	delete[] pix_array;
 	SDL_DestroyTexture(texture);
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(screen);
@@ -171,7 +165,7 @@ int main(int argc, char** argv)
     {
 		for (int i = 0; i < nx; ++i, sample_idx++)
 		{
-			vec3 col = r.pixel_color(i, j);
+			vec3 col = r.get_pixel_color(i, j);
 			col = vec3( sqrtf(col[0]), sqrtf(col[1]), sqrtf(col[2]) );
 			int ir = int(255.99*col.r());
 			int ig = int(255.99*col.g());

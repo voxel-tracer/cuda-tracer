@@ -34,11 +34,13 @@ init_cu_scene(const hitable_list* world)
 	return scene;
 }
 
-class pixel_compare {
-public:
-	bool operator() (pixel p0, pixel p1)
+struct pixel_compare {
+	const pixel* pixels;
+	pixel_compare(pixel* _pixels) { pixels = _pixels; }
+
+	bool operator() (int p0, int p1)
 	{
-		return p0.samples < p1.samples;
+		return pixels[p0].samples < pixels[p1].samples;
 	}
 };
 
@@ -63,7 +65,8 @@ void renderer::prepare_kernel()
 	h_colors = new vec3[num_pixels];
 	h_sample_colors = new vec3[num_pixels];
 	h_hits = new cu_hit[num_pixels];
-
+	pixel_idx = new int[num_pixels];
+	
 	// allocate device memory for input
     d_scene = NULL;
 	err(cudaMalloc((void **)&d_scene, scene_size * sizeof(cu_sphere)), "allocate device d_scene");
@@ -82,7 +85,8 @@ void renderer::prepare_kernel()
 	{
 		h_sample_colors[i] = vec3(1, 1, 1);
 		pixels[i].id = i;
-		pixels[i].samples = 1; // we initially generate one ray per pixel
+		pixels[i].samples = 0;
+		pixel_idx[i] = i;
 	}
 
 	clock_t start = clock();
@@ -92,6 +96,8 @@ void renderer::prepare_kernel()
 	num_rays = num_pixels;
 
 	free(h_scene);
+
+	pix_array = new unsigned int[nx * ny];
 }
 
 cu_ray* renderer::generate_rays(cu_ray* rays)
@@ -174,7 +180,6 @@ hit_scene(const cu_ray* rays, const unsigned int num_rays, const cu_sphere* scen
 	hits[i].hit_idx = hit_idx;
 }
 
-
 void renderer::run_kernel()
 {
 	cudaProfilerStart();
@@ -216,23 +221,28 @@ void renderer::compact_rays()
 		{
 			// ray is no longer active, cumulate its color
 			h_colors[pixelId] += h_sample_colors[i];
-
+			pixels[pixelId].samples++;
+			vec3 col = h_colors[pixelId] / float(pixels[pixelId].samples);
+			col = vec3(sqrtf(col[0]), sqrtf(col[1]), sqrtf(col[2]));
+			int ir = int(255.99*col.r());
+			int ig = int(255.99*col.g());
+			int ib = int(255.99*col.b());
+			pix_array[pixelId] = (ir << 16) + (ig << 8) + ib;
 		}
 	}
 	compact += clock() - start;
 	// for each ray that's no longer active, sample a pixel that's not fully sampled yet
 	start = clock();
-	std::sort(pixels, pixels+numpixels(), pixel_compare());
+	std::sort(pixel_idx, pixel_idx+numpixels(), pixel_compare(pixels));
 	unsigned int sampled = 0;
 	do
 	{
 		sampled = 0;
 		for (unsigned int i = 0; i < numpixels() && ray_idx < numpixels(); ++i)
 		{
-			const unsigned int pixelId = pixels[i].id;
-			if (pixels[i].samples < ns)
+			const unsigned int pixelId = pixel_idx[i];
+			if (pixels[pixelId].samples <= ns)
 			{
-				pixels[i].samples++;
 				// then, generate a new sample
 				const unsigned int x = pixelId % nx;
 				const unsigned int y = ny - 1 - (pixelId / nx);
@@ -255,4 +265,5 @@ void renderer::destroy() {
 
 	// Free host memory
 	free(h_hits);
+	delete[] pix_array;
 }
