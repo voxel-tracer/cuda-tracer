@@ -78,7 +78,7 @@ int main(int argc, char** argv)
 
 	const int nx = 600;
 	const int ny = 300;
-	const int ns = 1000;
+	const int ns = 100;
 	hitable_list *world = random_scene();
 
     camera *cam = init_camera(nx, ny);
@@ -112,6 +112,7 @@ int main(int argc, char** argv)
 		r.compact_rays();
 
 		// update pixels
+		if (iteration % 1 == 0)
 		{
 			unsigned int sample_idx = 0;
 			for (int j = ny - 1; j >= 0; j--)
@@ -126,11 +127,12 @@ int main(int argc, char** argv)
 					pix_array[(ny - 1 - j)*nx + i] = (ir << 16) + (ig << 8) + ib;
 				}
 			}
+
+			SDL_UpdateTexture(texture, NULL, pix_array, nx * sizeof(Uint32));
+			SDL_RenderClear(renderer);
+			SDL_RenderCopy(renderer, texture, NULL, NULL);
+			SDL_RenderPresent(renderer);
 		}
-		SDL_UpdateTexture(texture, NULL, pix_array, nx * sizeof(Uint32));
-		SDL_RenderClear(renderer);
-		SDL_RenderCopy(renderer, texture, NULL, NULL);
-		SDL_RenderPresent(renderer);
 
 		++iteration;
 	}

@@ -1,10 +1,13 @@
 #include <cuda_runtime.h>
 #include <cuda_profiler_api.h>
 #include <helper_cuda.h>
+#include <algorithm>
+#include <iterator>
 
 #include "renderer.h"
 #include "sphere.h"
 #include "device_launch_parameters.h"
+
 
 
 void err(cudaError_t err, char *msg)
@@ -219,6 +222,7 @@ void renderer::compact_rays()
 	compact += clock() - start;
 	// for each ray that's no longer active, sample a pixel that's not fully sampled yet
 	start = clock();
+	std::sort(pixels, pixels+numpixels(), pixel_compare());
 	unsigned int sampled = 0;
 	do
 	{
