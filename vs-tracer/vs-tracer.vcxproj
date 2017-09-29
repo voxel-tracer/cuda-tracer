@@ -24,12 +24,26 @@
     <ClInclude Include="hitable_list.h" />
     <ClInclude Include="material.h" />
     <ClInclude Include="ray.h" />
+    <ClInclude Include="renderer.h" />
+    <ClInclude Include="resource.h" />
     <ClInclude Include="sphere.h" />
     <ClInclude Include="utils.h" />
     <ClInclude Include="vec3.h" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="raytracer.cu" />
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="renderer.cu">
+      <FileType>CppCode</FileType>
+    </CudaCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="material.cpp" />
+    <ClCompile Include="utils.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="vs-tracer.rc" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{51062B2E-9E77-4127-91AC-1E9F78E9D9C3}</ProjectGuid>
