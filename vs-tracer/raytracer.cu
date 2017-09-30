@@ -78,20 +78,24 @@ int main(int argc, char** argv)
 
 	const int nx = 600;
 	const int ny = 300;
-	const int ns = 1000;
+	const int ns = 100;
 	hitable_list *world = random_scene();
 
     camera *cam = init_camera(nx, ny);
 	renderer r(cam, world, nx, ny, ns, 50, 0.001);
 
+    clock_t begin = clock();
+
+	r.prepare_kernel();
+
 	SDL_Window* screen = SDL_CreateWindow("Voxel Tracer", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, nx, ny, 0);
 	SDL_Renderer* renderer = SDL_CreateRenderer(screen, -1, 0);
 	SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, nx, ny);
 
-    clock_t begin = clock();
+	//do {
+	//	SDL_WaitEvent(&event);
+	//} while (event.type != SDL_KEYDOWN);
 
-	r.prepare_kernel();
-	
 	unsigned int iteration = 0;
 	unsigned int total_rays = 0;
 	while (!quit && r.numrays() > 0)
@@ -121,15 +125,9 @@ int main(int argc, char** argv)
 
 		++iteration;
 
-		//SDL_WaitEvent(&event);
-		while (SDL_PollEvent(&event)) {
-			switch (event.type)
-			{
-			case SDL_QUIT:
-				quit = true;
-				break;
-			}
-		}
+		//while (SDL_PollEvent(&event)) {
+		//	quit = quit || event.type == SDL_QUIT;
+		//}
 	}
 
     clock_t end = clock();
@@ -140,22 +138,10 @@ int main(int argc, char** argv)
 		double(r.generate) / CLOCKS_PER_SEC,
 		double(r.compact) / CLOCKS_PER_SEC);
 
-	//while (!quit)
-	//{
-	//	SDL_WaitEvent(&event);
-
-	//	switch (event.type)
-	//	{
-	//	case SDL_QUIT:
-	//		quit = true;
-	//		break;
-	//	}
-	//}
-
 	SDL_DestroyTexture(texture);
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(screen);
-
+/*
     // generate final image
     ofstream image;
     image.open("picture.ppm");
@@ -174,7 +160,8 @@ int main(int argc, char** argv)
 			image << ir << " " << ig << " " << ib << "\n";
 		}
     }
-	
+*/	
+	SDL_Quit();
 	r.destroy();
 
     return 0;

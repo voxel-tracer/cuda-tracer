@@ -15,6 +15,7 @@ struct pixel {
 	//TODO pixel should know it's coordinates and it's id should be a computed field
 	unsigned int id;
 	unsigned int samples;
+	unsigned int done;
 
 	pixel() { id = 0; samples = 0; }
 };
@@ -38,6 +39,10 @@ public:
 		const unsigned int pixelId = get_pixelId(x, y);
 		if (pixels[pixelId].samples == 0) return vec3(0, 0, 0);
 		return h_colors[pixelId] / float(pixels[pixelId].samples);
+	}
+	vec3 get_pixel_samples(int x, int y) {
+		const unsigned int pixelId = get_pixelId(x, y);
+		return vec3(pixels[pixelId].samples/ns, 0, 0);
 	}
 
 	void prepare_kernel();

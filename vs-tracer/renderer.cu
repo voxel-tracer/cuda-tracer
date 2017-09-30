@@ -85,7 +85,7 @@ void renderer::prepare_kernel()
 	{
 		h_sample_colors[i] = vec3(1, 1, 1);
 		pixels[i].id = i;
-		pixels[i].samples = 0;
+		pixels[i].samples = 1;
 		pixel_idx[i] = i;
 	}
 
@@ -221,8 +221,9 @@ void renderer::compact_rays()
 		{
 			// ray is no longer active, cumulate its color
 			h_colors[pixelId] += h_sample_colors[i];
-			pixels[pixelId].samples++;
-			vec3 col = h_colors[pixelId] / float(pixels[pixelId].samples);
+			unsigned int num_samples = ++(pixels[pixelId].done);
+			//TODO extract this logic out of the renderer
+			vec3 col = h_colors[pixelId] / float(num_samples);
 			col = vec3(sqrtf(col[0]), sqrtf(col[1]), sqrtf(col[2]));
 			int ir = int(255.99*col.r());
 			int ig = int(255.99*col.g());
@@ -241,8 +242,9 @@ void renderer::compact_rays()
 		for (unsigned int i = 0; i < numpixels() && ray_idx < numpixels(); ++i)
 		{
 			const unsigned int pixelId = pixel_idx[i];
-			if (pixels[pixelId].samples <= ns)
+			if (pixels[pixelId].samples < ns)
 			{
+				pixels[pixelId].samples++;
 				// then, generate a new sample
 				const unsigned int x = pixelId % nx;
 				const unsigned int y = ny - 1 - (pixelId / nx);
