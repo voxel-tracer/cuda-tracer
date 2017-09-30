@@ -37,8 +37,8 @@ public:
 	unsigned int get_pixelId(int x, int y) { return (ny - y - 1)*nx + x; }
 	vec3 get_pixel_color(int x, int y) {
 		const unsigned int pixelId = get_pixelId(x, y);
-		if (pixels[pixelId].samples == 0) return vec3(0, 0, 0);
-		return h_colors[pixelId] / float(pixels[pixelId].samples);
+		if (pixels[pixelId].done == 0) return vec3(0, 0, 0);
+		return h_colors[pixelId] / float(pixels[pixelId].done);
 	}
 	vec3 get_pixel_samples(int x, int y) {
 		const unsigned int pixelId = get_pixelId(x, y);
@@ -72,7 +72,6 @@ public:
 	pixel* pixels;
 	vec3* h_colors;
 	vec3* h_sample_colors;
-	unsigned int* pix_array;
 
 	clock_t kernel = 0;
 	clock_t generate = 0;

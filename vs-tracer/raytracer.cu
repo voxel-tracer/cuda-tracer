@@ -76,8 +76,8 @@ int main(int argc, char** argv)
 
 	printf("preparing renderer...\n");
 
-	const int nx = 600;
-	const int ny = 300;
+	const int nx = 1200;
+	const int ny = 600;
 	const int ns = 100;
 	hitable_list *world = random_scene();
 
@@ -91,6 +91,7 @@ int main(int argc, char** argv)
 	SDL_Window* screen = SDL_CreateWindow("Voxel Tracer", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, nx, ny, 0);
 	SDL_Renderer* renderer = SDL_CreateRenderer(screen, -1, 0);
 	SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, nx, ny);
+	unsigned int* pix_array = new unsigned int[r.numpixels()];
 
 	//do {
 	//	SDL_WaitEvent(&event);
@@ -101,7 +102,7 @@ int main(int argc, char** argv)
 	while (!quit && r.numrays() > 0)
 	{
 		total_rays += r.numrays();
-		if (iteration % 100 == 0)
+		if (iteration % 1 == 0)
 		{
 			//cout << "iteration " << iteration << "(" << num_rays << " rays)\n";
 			cout << "iteration " << iteration << "(" << r.numrays() << " rays)\r";
@@ -117,7 +118,19 @@ int main(int argc, char** argv)
 		// update pixels
 		if (iteration % 1 == 0)
 		{
-			SDL_UpdateTexture(texture, NULL, r.pix_array, nx * sizeof(unsigned int));
+			for (int x = 0; x < nx; x++)
+			{
+				for (int y = 0; y < ny; y++)
+				{
+					vec3 col = r.get_pixel_color(x, y);
+					col = vec3(sqrtf(col[0]), sqrtf(col[1]), sqrtf(col[2]));
+					int ir = int(255.99*col.r());
+					int ig = int(255.99*col.g());
+					int ib = int(255.99*col.b());
+					pix_array[(ny - 1 - y)*nx + x] = (ir << 16) + (ig << 8) + ib;
+				}
+			}
+			SDL_UpdateTexture(texture, NULL, pix_array, nx * sizeof(unsigned int));
 			SDL_RenderClear(renderer);
 			SDL_RenderCopy(renderer, texture, NULL, NULL);
 			SDL_RenderPresent(renderer);
@@ -125,9 +138,9 @@ int main(int argc, char** argv)
 
 		++iteration;
 
-		//while (SDL_PollEvent(&event)) {
-		//	quit = quit || event.type == SDL_QUIT;
-		//}
+		while (SDL_PollEvent(&event)) {
+			quit = quit || event.type == SDL_QUIT;
+		}
 	}
 
     clock_t end = clock();
@@ -137,10 +150,17 @@ int main(int argc, char** argv)
 		double(r.kernel) / CLOCKS_PER_SEC,
 		double(r.generate) / CLOCKS_PER_SEC,
 		double(r.compact) / CLOCKS_PER_SEC);
+	cout.flush();
+
+	while (!quit) {
+		SDL_WaitEvent(&event);
+		quit = event.type == SDL_QUIT;
+	}
 
 	SDL_DestroyTexture(texture);
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(screen);
+	delete[] pix_array;
 /*
     // generate final image
     ofstream image;

@@ -97,7 +97,6 @@ void renderer::prepare_kernel()
 
 	free(h_scene);
 
-	pix_array = new unsigned int[nx * ny];
 }
 
 cu_ray* renderer::generate_rays(cu_ray* rays)
@@ -221,14 +220,7 @@ void renderer::compact_rays()
 		{
 			// ray is no longer active, cumulate its color
 			h_colors[pixelId] += h_sample_colors[i];
-			unsigned int num_samples = ++(pixels[pixelId].done);
-			//TODO extract this logic out of the renderer
-			vec3 col = h_colors[pixelId] / float(num_samples);
-			col = vec3(sqrtf(col[0]), sqrtf(col[1]), sqrtf(col[2]));
-			int ir = int(255.99*col.r());
-			int ig = int(255.99*col.g());
-			int ib = int(255.99*col.b());
-			pix_array[pixelId] = (ir << 16) + (ig << 8) + ib;
+			++(pixels[pixelId].done);
 		}
 	}
 	compact += clock() - start;
@@ -267,5 +259,4 @@ void renderer::destroy() {
 
 	// Free host memory
 	free(h_hits);
-	delete[] pix_array;
 }
