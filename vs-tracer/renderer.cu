@@ -45,7 +45,7 @@ struct pixel_compare {
 };
 
 
-inline void generate_ray(const camera* cam, cu_ray& r, const unsigned int x, const unsigned int y, const unsigned int nx, const unsigned int ny)
+inline void renderer::generate_ray(cu_ray& r, int x, int y)
 {
 	float u = float(x + drand48()) / float(nx);
 	float v = float(y + drand48()) / float(ny);
@@ -96,7 +96,28 @@ void renderer::prepare_kernel()
 	num_rays = num_pixels;
 
 	free(h_scene);
+}
 
+
+void renderer::update_camera()
+{
+	const unsigned int num_pixels = numpixels();
+
+	// set temporary variables
+	for (int i = 0; i < num_pixels; i++)
+	{
+		h_colors[i] = vec3(0, 0, 0);
+		h_sample_colors[i] = vec3(1, 1, 1);
+		pixels[i].id = i;
+		pixels[i].samples = 1;
+		pixels[i].done = 0;
+		pixel_idx[i] = i;
+	}
+
+	clock_t start = clock();
+	generate_rays(h_rays);
+	generate += clock() - start;
+	num_rays = num_pixels;
 }
 
 cu_ray* renderer::generate_rays(cu_ray* rays)
@@ -104,7 +125,7 @@ cu_ray* renderer::generate_rays(cu_ray* rays)
 	unsigned int ray_idx = 0;
 	for (int j = ny - 1; j >= 0; j--)
 		for (int i = 0; i < nx; ++i, ++ray_idx)
-			generate_ray(cam, rays[ray_idx], i, j, nx, ny);
+			generate_ray(rays[ray_idx], i, j);
 
 	return rays;
 }
@@ -240,7 +261,7 @@ void renderer::compact_rays()
 				// then, generate a new sample
 				const unsigned int x = pixelId % nx;
 				const unsigned int y = ny - 1 - (pixelId / nx);
-				generate_ray(cam, h_rays[ray_idx], x, y, nx, ny);
+				generate_ray(h_rays[ray_idx], x, y);
 				h_sample_colors[ray_idx] = vec3(1, 1, 1);
 				++ray_idx;
 				++sampled;

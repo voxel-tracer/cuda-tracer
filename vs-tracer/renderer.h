@@ -40,12 +40,9 @@ public:
 		if (pixels[pixelId].done == 0) return vec3(0, 0, 0);
 		return h_colors[pixelId] / float(pixels[pixelId].done);
 	}
-	vec3 get_pixel_samples(int x, int y) {
-		const unsigned int pixelId = get_pixelId(x, y);
-		return vec3(pixels[pixelId].samples/ns, 0, 0);
-	}
 
 	void prepare_kernel();
+	void update_camera();
 
 	bool color(cu_ray& cu_r, const cu_hit& hit, vec3& sample_clr);
 	cu_ray* generate_rays(cu_ray* rays);
@@ -80,5 +77,5 @@ public:
 	unsigned int num_rays;
 private:
 	int* pixel_idx;
+	inline void generate_ray(cu_ray& r, int x, int y);
 };
-inline void generate_ray(const camera* cam, cu_ray& r, const unsigned int x, const unsigned int y, const unsigned int nx, const unsigned int ny);

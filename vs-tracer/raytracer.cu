@@ -67,17 +67,14 @@ init_camera(unsigned int nx, unsigned int ny)
  */
 int main(int argc, char** argv)
 {
-	bool quit = false;
-	SDL_Event event;
-
 	SDL_Init(SDL_INIT_VIDEO);
 
 	const unsigned int scene_size = 500;
 
 	printf("preparing renderer...\n");
 
-	const int nx = 1200;
-	const int ny = 600;
+	const int nx = 600;
+	const int ny = 300;
 	const int ns = 100;
 	hitable_list *world = random_scene();
 
@@ -88,11 +85,14 @@ int main(int argc, char** argv)
 
 	r.prepare_kernel();
 
-	SDL_Window* screen = SDL_CreateWindow("Voxel Tracer", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, nx, ny, 0);
+	SDL_Window* screen = SDL_CreateWindow("Voxel Tracer (rendering)", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, nx, ny, 0);
 	SDL_Renderer* renderer = SDL_CreateRenderer(screen, -1, 0);
 	SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, nx, ny);
 	unsigned int* pix_array = new unsigned int[r.numpixels()];
 
+	bool quit = false;
+	bool updating = false;
+	SDL_Event event;
 	//do {
 	//	SDL_WaitEvent(&event);
 	//} while (event.type != SDL_KEYDOWN);
@@ -139,7 +139,21 @@ int main(int argc, char** argv)
 		++iteration;
 
 		while (SDL_PollEvent(&event)) {
-			quit = quit || event.type == SDL_QUIT;
+			switch (event.type) {
+			case SDL_QUIT:
+				quit = true;
+				break;
+			case SDL_MOUSEBUTTONDOWN:
+				if (!updating)
+				{
+					r.update_camera();
+					updating = true;
+				}
+				break;
+			case SDL_MOUSEBUTTONUP:
+				updating = false;
+				break;
+			}
 		}
 	}
 
@@ -151,6 +165,8 @@ int main(int argc, char** argv)
 		double(r.generate) / CLOCKS_PER_SEC,
 		double(r.compact) / CLOCKS_PER_SEC);
 	cout.flush();
+
+	SDL_SetWindowTitle(screen, "Voxel Tracer");
 
 	while (!quit) {
 		SDL_WaitEvent(&event);
