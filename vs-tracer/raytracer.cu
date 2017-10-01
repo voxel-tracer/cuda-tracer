@@ -79,6 +79,7 @@ int main(int argc, char** argv)
 	hitable_list *world = random_scene();
 
     camera *cam = init_camera(nx, ny);
+	cam->look_from(80*M_PI/180, 45*M_PI/180);
 	renderer r(cam, world, nx, ny, ns, 50, 0.001);
 
     clock_t begin = clock();
