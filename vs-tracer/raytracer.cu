@@ -75,7 +75,7 @@ int main(int argc, char** argv)
 
 	const int nx = 600;
 	const int ny = 300;
-	const int ns = 100;
+	const int ns = 1000;
 	hitable_list *world = random_scene();
 
     camera *cam = init_camera(nx, ny);
@@ -103,42 +103,42 @@ int main(int argc, char** argv)
 
 	unsigned int iteration = 0;
 	unsigned int total_rays = 0;
-	while (!quit && r.numrays() > 0)
+	while (!quit)
 	{
-		total_rays += r.numrays();
-		//if (iteration % 1 == 0)
-		//{
-		//	//cout << "iteration " << iteration << "(" << num_rays << " rays)\n";
-		//	cout << "iteration " << iteration << "(" << r.numrays() << " rays)\r";
-		//	cout.flush();
-		//}
+		if (r.numrays() > 0)
+		{
+			total_rays += r.numrays();
+			//if (iteration % 1 == 0)
+			//{
+			//	//cout << "iteration " << iteration << "(" << num_rays << " rays)\n";
+			//	cout << "iteration " << iteration << "(" << r.numrays() << " rays)\r";
+			//	cout.flush();
+			//}
 
-		// compute ray-world intersections
-		r.run_kernel();
+			// compute ray-world intersections
+			r.run_kernel();
 
-		// compact active rays
-		r.compact_rays();
+			// compact active rays
+			r.compact_rays();
+		}
 
 		// update pixels
-		if (iteration % 1 == 0)
+		for (int x = 0; x < nx; x++)
 		{
-			for (int x = 0; x < nx; x++)
+			for (int y = 0; y < ny; y++)
 			{
-				for (int y = 0; y < ny; y++)
-				{
-					vec3 col = r.get_pixel_color(x, y);
-					col = vec3(sqrtf(col[0]), sqrtf(col[1]), sqrtf(col[2]));
-					int ir = int(255.99*col.r());
-					int ig = int(255.99*col.g());
-					int ib = int(255.99*col.b());
-					pix_array[(ny - 1 - y)*nx + x] = (ir << 16) + (ig << 8) + ib;
-				}
+				vec3 col = r.get_pixel_color(x, y);
+				col = vec3(sqrtf(col[0]), sqrtf(col[1]), sqrtf(col[2]));
+				int ir = int(255.99*col.r());
+				int ig = int(255.99*col.g());
+				int ib = int(255.99*col.b());
+				pix_array[(ny - 1 - y)*nx + x] = (ir << 16) + (ig << 8) + ib;
 			}
-			SDL_UpdateTexture(texture, NULL, pix_array, nx * sizeof(unsigned int));
-			SDL_RenderClear(renderer);
-			SDL_RenderCopy(renderer, texture, NULL, NULL);
-			SDL_RenderPresent(renderer);
 		}
+		SDL_UpdateTexture(texture, NULL, pix_array, nx * sizeof(unsigned int));
+		SDL_RenderClear(renderer);
+		SDL_RenderCopy(renderer, texture, NULL, NULL);
+		SDL_RenderPresent(renderer);
 
 		++iteration;
 
