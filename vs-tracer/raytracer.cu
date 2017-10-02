@@ -73,13 +73,16 @@ int main(int argc, char** argv)
 
 	printf("preparing renderer...\n");
 
-	const int nx = 600;
-	const int ny = 300;
-	const int ns = 100;
+	const int nx = 1200;
+	const int ny = 600;
+	const int ns = 1000;
 	hitable_list *world = random_scene();
 
     camera *cam = init_camera(nx, ny);
-	cam->look_from(80*M_PI/180, 45*M_PI/180);
+	float theta = 80 * M_PI / 180;
+	float phi = 45 * M_PI / 180;
+	const float delta = 1 * M_PI / 180;
+	cam->look_from(theta, phi);
 	renderer r(cam, world, nx, ny, ns, 50, 0.001);
 
     clock_t begin = clock();
@@ -92,7 +95,7 @@ int main(int argc, char** argv)
 	unsigned int* pix_array = new unsigned int[r.numpixels()];
 
 	bool quit = false;
-	bool updating = false;
+	bool mouse_drag = false;
 	SDL_Event event;
 	//do {
 	//	SDL_WaitEvent(&event);
@@ -103,12 +106,12 @@ int main(int argc, char** argv)
 	while (!quit && r.numrays() > 0)
 	{
 		total_rays += r.numrays();
-		if (iteration % 1 == 0)
-		{
-			//cout << "iteration " << iteration << "(" << num_rays << " rays)\n";
-			cout << "iteration " << iteration << "(" << r.numrays() << " rays)\r";
-			cout.flush();
-		}
+		//if (iteration % 1 == 0)
+		//{
+		//	//cout << "iteration " << iteration << "(" << num_rays << " rays)\n";
+		//	cout << "iteration " << iteration << "(" << r.numrays() << " rays)\r";
+		//	cout.flush();
+		//}
 
 		// compute ray-world intersections
 		r.run_kernel();
@@ -144,15 +147,23 @@ int main(int argc, char** argv)
 			case SDL_QUIT:
 				quit = true;
 				break;
-			case SDL_MOUSEBUTTONDOWN:
-				if (!updating)
-				{
+			case SDL_MOUSEMOTION:
+				if (mouse_drag) {
+					int mx = event.motion.xrel;
+					int my = event.motion.yrel;
+					theta += -my*delta; 
+					if (theta < delta) theta = delta;
+					if (theta > (M_PI_2 - delta)) theta = M_PI_2 - delta;
+					phi += -mx*delta;
+					cam->look_from(theta, phi);
 					r.update_camera();
-					updating = true;
 				}
 				break;
+			case SDL_MOUSEBUTTONDOWN:
+				mouse_drag = true;
+				break;
 			case SDL_MOUSEBUTTONUP:
-				updating = false;
+				mouse_drag = false;
 				break;
 			}
 		}
