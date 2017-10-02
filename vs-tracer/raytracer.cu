@@ -73,9 +73,9 @@ int main(int argc, char** argv)
 
 	printf("preparing renderer...\n");
 
-	const int nx = 1200;
-	const int ny = 600;
-	const int ns = 1000;
+	const int nx = 600;
+	const int ny = 300;
+	const int ns = 100;
 	hitable_list *world = random_scene();
 
     camera *cam = init_camera(nx, ny);

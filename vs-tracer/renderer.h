@@ -44,7 +44,7 @@ public:
 	void prepare_kernel();
 	void update_camera();
 
-	bool color(cu_ray& cu_r, const cu_hit& hit, vec3& sample_clr);
+	bool color(int ray_idx);
 	cu_ray* generate_rays(cu_ray* rays);
 	void run_kernel();
 	void compact_rays();
@@ -77,5 +77,6 @@ public:
 	unsigned int num_rays;
 private:
 	int* pixel_idx;
-	inline void generate_ray(cu_ray& r, int x, int y);
+	sample* samples;
+	inline void generate_ray(int ray_idx, int x, int y);
 };

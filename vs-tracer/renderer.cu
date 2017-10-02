@@ -45,13 +45,13 @@ struct pixel_compare {
 };
 
 
-inline void renderer::generate_ray(cu_ray& r, int x, int y)
+inline void renderer::generate_ray(int ray_idx, int x, int y)
 {
 	float u = float(x + drand48()) / float(nx);
 	float v = float(y + drand48()) / float(ny);
-	cam->get_ray(u, v, r);
-	r.depth = 0;
-	r.pixelId = (ny - y - 1)*nx + x;
+	cam->get_ray(u, v, h_rays[ray_idx]);
+	samples[ray_idx].depth = 0;
+	samples[ray_idx].pixelId = (ny - y - 1)*nx + x;
 }
 
 void renderer::prepare_kernel()
@@ -61,6 +61,7 @@ void renderer::prepare_kernel()
 	scene_size = 500;
 	
 	pixels = new pixel[num_pixels];
+	samples = new sample[num_pixels];
 	h_rays = new cu_ray[num_pixels];
 	h_colors = new vec3[num_pixels];
 	h_sample_colors = new vec3[num_pixels];
@@ -125,12 +126,17 @@ cu_ray* renderer::generate_rays(cu_ray* rays)
 	unsigned int ray_idx = 0;
 	for (int j = ny - 1; j >= 0; j--)
 		for (int i = 0; i < nx; ++i, ++ray_idx)
-			generate_ray(rays[ray_idx], i, j);
+			generate_ray(ray_idx, i, j);
 
 	return rays;
 }
 
-bool renderer::color(cu_ray& cu_r, const cu_hit& hit, vec3& sample_clr) {
+bool renderer::color(int ray_idx) {
+	cu_ray& cu_r = h_rays[ray_idx];
+	const cu_hit& hit = h_hits[ray_idx];
+	vec3& sample_clr = h_sample_colors[ray_idx];
+	sample& s = samples[ray_idx];
+
 	ray r = ray(vec3(cu_r.origin), vec3(cu_r.direction));
 
 	if (hit.hit_idx == -1) {
@@ -142,14 +148,14 @@ bool renderer::color(cu_ray& cu_r, const cu_hit& hit, vec3& sample_clr) {
 	}
 
 	hit_record rec;
-	sphere *s = (sphere*)(world->list[hit.hit_idx]);
+	sphere *sphr = (sphere*)(world->list[hit.hit_idx]);
 	rec.t = hit.hit_t;
 	rec.p = r.point_at_parameter(hit.hit_t);
-	rec.normal = (rec.p - s->center) / s->radius;
-	rec.mat_ptr = s->mat_ptr;
+	rec.normal = (rec.p - sphr->center) / sphr->radius;
+	rec.mat_ptr = sphr->mat_ptr;
 
 	vec3 attenuation;
-	if ((++cu_r.depth) <= max_depth && scatter(*rec.mat_ptr, r, rec, attenuation, r)) {
+	if ((++s.depth) <= max_depth && scatter(*rec.mat_ptr, r, rec, attenuation, r)) {
 		cu_r.origin = r.origin().to_float3();
 		cu_r.direction = r.direction().to_float3();
 
@@ -229,12 +235,13 @@ void renderer::compact_rays()
 	unsigned int ray_idx = 0;
 	for (unsigned int i = 0; i < num_rays; ++i)
 	{
-		const unsigned int pixelId = h_rays[i].pixelId;
-		if (color(h_rays[i], h_hits[i], h_sample_colors[i]) && h_sample_colors[i].squared_length() > min_attenuation)
+		const unsigned int pixelId = samples[i].pixelId;
+		if (color(i) && h_sample_colors[i].squared_length() > min_attenuation)
 		{
 			// compact ray
 			h_rays[ray_idx] = h_rays[i];
 			h_sample_colors[ray_idx] = h_sample_colors[i];
+			samples[ray_idx] = samples[i];
 			++ray_idx;
 		}
 		else
@@ -261,7 +268,7 @@ void renderer::compact_rays()
 				// then, generate a new sample
 				const unsigned int x = pixelId % nx;
 				const unsigned int y = ny - 1 - (pixelId / nx);
-				generate_ray(h_rays[ray_idx], x, y);
+				generate_ray(ray_idx, x, y);
 				h_sample_colors[ray_idx] = vec3(1, 1, 1);
 				++ray_idx;
 				++sampled;
@@ -280,4 +287,5 @@ void renderer::destroy() {
 
 	// Free host memory
 	free(h_hits);
+	delete[] samples;
 }
