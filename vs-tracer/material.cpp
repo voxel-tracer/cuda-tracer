@@ -26,6 +26,13 @@ material* make_dielectric(float ref_idx)
 	return mat;
 }
 
+material* make_diffuse_light(const vec3& e)
+{
+	material *mat = new material();
+	mat->emitted = e;
+	return mat;
+}
+
 inline bool scatter_lambertian(const material& mat, const ray& ray_in, const hit_record& rec, vec3& attenuation, ray& scattered)
 {
 	vec3 target = rec.p + rec.normal + random_in_unit_sphere();

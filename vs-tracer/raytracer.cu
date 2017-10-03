@@ -1,6 +1,7 @@
 #include <iostream>
 #include <float.h>
 #include <fstream>
+#include <algorithm>
 #include <ctime>
 #include <SDL.h>
 
@@ -47,6 +48,7 @@ random_scene()
     list[i++] = new sphere(vec3(0, 1, 0), 1.0, make_dielectric(1.5));
     list[i++] = new sphere(vec3(-4, 1, 0), 1.0, make_lambertian(vec3(0.4, 0.2, 0.1)));
     list[i++] = new sphere(vec3(4, 1, 0), 1.0, make_metal(vec3(0.7, 0.6, 0.5), 0.0));
+	list[i++] = new sphere(vec3(10, 10, 10), 0.5, make_diffuse_light(vec3(20, 20, 20)));
 
     return new hitable_list(list,i);
 }
@@ -75,7 +77,7 @@ int main(int argc, char** argv)
 
 	const int nx = 600;
 	const int ny = 300;
-	const int ns = 1000;
+	const int ns = 10000;
 	hitable_list *world = random_scene();
 
     camera *cam = init_camera(nx, ny);
@@ -129,9 +131,9 @@ int main(int argc, char** argv)
 			{
 				vec3 col = r.get_pixel_color(x, y);
 				col = vec3(sqrtf(col[0]), sqrtf(col[1]), sqrtf(col[2]));
-				int ir = int(255.99*col.r());
-				int ig = int(255.99*col.g());
-				int ib = int(255.99*col.b());
+				int ir = min(255, int(255.99*col.r()));
+				int ig = min(255, int(255.99*col.g()));
+				int ib = min(255, int(255.99*col.b()));
 				pix_array[(ny - 1 - y)*nx + x] = (ir << 16) + (ig << 8) + ib;
 			}
 		}

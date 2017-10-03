@@ -141,9 +141,10 @@ bool renderer::color(int ray_idx) {
 
 	if (hit.hit_idx == -1) {
 		// no intersection with spheres, return sky color
-		vec3 unit_direction = unit_vector(r.direction());
-		float t = 0.5*(unit_direction.y() + 1.0);
-		sample_clr *= (1 - t)*vec3(1.0, 1.0, 1.0) + t*vec3(0.5, 0.7, 1.0);
+		//vec3 unit_direction = unit_vector(r.direction());
+		//float t = 0.5*(unit_direction.y() + 1.0);
+		//sample_clr *= (1 - t)*vec3(1.0, 1.0, 1.0) + t*vec3(0.5, 0.7, 1.0);
+		sample_clr = vec3(0, 0, 0);
 		return false;
 	}
 
@@ -155,15 +156,16 @@ bool renderer::color(int ray_idx) {
 	rec.mat_ptr = sphr->mat_ptr;
 
 	vec3 attenuation;
+	const vec3& emitted = rec.mat_ptr->emitted;
 	if ((++s.depth) <= max_depth && scatter(*rec.mat_ptr, r, rec, attenuation, r)) {
 		cu_r.origin = r.origin().to_float3();
 		cu_r.direction = r.direction().to_float3();
 
-		sample_clr *= attenuation;
+		sample_clr = emitted + sample_clr*attenuation;
 		return true;
 	}
 
-	sample_clr = vec3(0, 0, 0);
+	sample_clr = emitted;
 	return false;
 }
 
