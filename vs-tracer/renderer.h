@@ -68,7 +68,6 @@ public:
 
 	pixel* pixels;
 	vec3* h_colors;
-	vec3* h_sample_colors;
 
 	clock_t kernel = 0;
 	clock_t generate = 0;

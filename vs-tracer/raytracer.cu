@@ -48,7 +48,7 @@ random_scene()
     list[i++] = new sphere(vec3(0, 1, 0), 1.0, make_dielectric(1.5));
     list[i++] = new sphere(vec3(-4, 1, 0), 1.0, make_lambertian(vec3(0.4, 0.2, 0.1)));
     list[i++] = new sphere(vec3(4, 1, 0), 1.0, make_metal(vec3(0.7, 0.6, 0.5), 0.0));
-	list[i++] = new sphere(vec3(10, 10, 10), 0.5, make_diffuse_light(vec3(20, 20, 20)));
+	list[i++] = new sphere(vec3(10, 10, 10), 0.5, make_diffuse_light(vec3(100, 100, 100)));
 
     return new hitable_list(list,i);
 }

@@ -26,9 +26,11 @@ struct cu_ray {
 struct sample {
 	unsigned int pixelId;
 	unsigned int depth;
+	vec3 color;
+	vec3 not_absorbed;
 
 	sample() {}
-	sample(sample& s) { pixelId = s.pixelId; depth = s.depth; }
+	sample(sample& s) { pixelId = s.pixelId; depth = s.depth; color = s.color; not_absorbed = s.not_absorbed; }
 };
 
 #endif /* RAY_H_ */

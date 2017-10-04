@@ -64,7 +64,6 @@ void renderer::prepare_kernel()
 	samples = new sample[num_pixels];
 	h_rays = new cu_ray[num_pixels];
 	h_colors = new vec3[num_pixels];
-	h_sample_colors = new vec3[num_pixels];
 	h_hits = new cu_hit[num_pixels];
 	pixel_idx = new int[num_pixels];
 	
@@ -84,7 +83,8 @@ void renderer::prepare_kernel()
 	// set temporary variables
 	for (int i = 0; i < num_pixels; i++)
 	{
-		h_sample_colors[i] = vec3(1, 1, 1);
+		samples[i].color = vec3(0, 0, 0);
+		samples[i].not_absorbed = vec3(1, 1, 1);
 		pixels[i].id = i;
 		pixels[i].samples = 1;
 		pixel_idx[i] = i;
@@ -108,7 +108,8 @@ void renderer::update_camera()
 	for (int i = 0; i < num_pixels; i++)
 	{
 		h_colors[i] = vec3(0, 0, 0);
-		h_sample_colors[i] = vec3(1, 1, 1);
+		samples[i].color = vec3(0, 0, 0);
+		samples[i].not_absorbed = vec3(1, 1, 1);
 		pixels[i].id = i;
 		pixels[i].samples = 1;
 		pixels[i].done = 0;
@@ -134,17 +135,17 @@ cu_ray* renderer::generate_rays(cu_ray* rays)
 bool renderer::color(int ray_idx) {
 	cu_ray& cu_r = h_rays[ray_idx];
 	const cu_hit& hit = h_hits[ray_idx];
-	vec3& sample_clr = h_sample_colors[ray_idx];
 	sample& s = samples[ray_idx];
 
 	ray r = ray(vec3(cu_r.origin), vec3(cu_r.direction));
 
 	if (hit.hit_idx == -1) {
 		// no intersection with spheres, return sky color
-		//vec3 unit_direction = unit_vector(r.direction());
-		//float t = 0.5*(unit_direction.y() + 1.0);
-		//sample_clr *= (1 - t)*vec3(1.0, 1.0, 1.0) + t*vec3(0.5, 0.7, 1.0);
-		sample_clr = vec3(0, 0, 0);
+		vec3 unit_direction = unit_vector(r.direction());
+		float t = 0.5*(unit_direction.y() + 1.0);
+		vec3 sky_clr = (1 - t)*vec3(1.0, 1.0, 1.0) + t*vec3(0.5, 0.7, 1.0);
+		//vec3 sky_clr(0, 0, 0);
+		s.color += s.not_absorbed*sky_clr;
 		return false;
 	}
 
@@ -157,15 +158,14 @@ bool renderer::color(int ray_idx) {
 
 	vec3 attenuation;
 	const vec3& emitted = rec.mat_ptr->emitted;
+	s.color += s.not_absorbed*emitted;
 	if ((++s.depth) <= max_depth && scatter(*rec.mat_ptr, r, rec, attenuation, r)) {
 		cu_r.origin = r.origin().to_float3();
 		cu_r.direction = r.direction().to_float3();
-
-		sample_clr = emitted + sample_clr*attenuation;
+		s.not_absorbed *= attenuation;
 		return true;
 	}
 
-	sample_clr = emitted;
 	return false;
 }
 
@@ -238,18 +238,17 @@ void renderer::compact_rays()
 	for (unsigned int i = 0; i < num_rays; ++i)
 	{
 		const unsigned int pixelId = samples[i].pixelId;
-		if (color(i) && h_sample_colors[i].squared_length() > min_attenuation)
+		if (color(i) && samples[i].not_absorbed.squared_length() > min_attenuation)
 		{
 			// compact ray
 			h_rays[ray_idx] = h_rays[i];
-			h_sample_colors[ray_idx] = h_sample_colors[i];
 			samples[ray_idx] = samples[i];
 			++ray_idx;
 		}
 		else
 		{
 			// ray is no longer active, cumulate its color
-			h_colors[pixelId] += h_sample_colors[i];
+			h_colors[pixelId] += samples[i].color;
 			++(pixels[pixelId].done);
 		}
 	}
@@ -271,7 +270,8 @@ void renderer::compact_rays()
 				const unsigned int x = pixelId % nx;
 				const unsigned int y = ny - 1 - (pixelId / nx);
 				generate_ray(ray_idx, x, y);
-				h_sample_colors[ray_idx] = vec3(1, 1, 1);
+				samples[ray_idx].color = vec3(0, 0, 0);
+				samples[ray_idx].not_absorbed = vec3(1, 1, 1);
 				++ray_idx;
 				++sampled;
 			}
