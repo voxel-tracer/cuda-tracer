@@ -15,15 +15,15 @@ inline float drand48(void) {
 }
 
 vec3 random_in_unit_sphere() {
-	//vec3 p;
-	//do {
-	//	p = vec3(2 * drand48() - 1, 2 * drand48() - 1, 2 * drand48() - 1);
-	//} while (p.squared_length() >= 1.0);
-	//return p;
-	vec3 p = vec3(2 * drand48() - 1, 2 * drand48() - 1, 2 * drand48() - 1);
-	if (p.squared_length() > 1.0)
-		return unit_vector(p);
+	vec3 p;
+	do {
+		p = vec3(2 * drand48() - 1, 2 * drand48() - 1, 2 * drand48() - 1);
+	} while (p.squared_length() >= 1.0);
 	return p;
+	//vec3 p = vec3(2 * drand48() - 1, 2 * drand48() - 1, 2 * drand48() - 1);
+	//if (p.squared_length() > 1.0)
+	//	return unit_vector(p);
+	//return p;
 }
 
 vec3 reflect(const vec3& v, const vec3& n) {

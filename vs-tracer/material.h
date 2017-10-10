@@ -19,12 +19,12 @@ struct material
 	vec3 albedo;
 	vec3 emitted;
 	float param;
+	bool scatter(const ray& ray_in, const hit_record& rec, vec3& attenuation, ray& scattered) const;
 };
 
 material* make_lambertian(const vec3& a);
 material* make_metal(const vec3& albedo, float fuzz);
 material* make_dielectric(float ref_idx);
 material* make_diffuse_light(const vec3& e);
-bool scatter(const material& mat, const ray& ray_in, const hit_record& rec, vec3& attenuation, ray& scattered);
 
 #endif /* MATERIAL_H_ */

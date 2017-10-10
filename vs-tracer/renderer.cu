@@ -159,7 +159,7 @@ bool renderer::color(int ray_idx) {
 	vec3 attenuation;
 	const vec3& emitted = rec.mat_ptr->emitted;
 	s.color += s.not_absorbed*emitted;
-	if ((++s.depth) <= max_depth && scatter(*rec.mat_ptr, r, rec, attenuation, r)) {
+	if ((++s.depth) <= max_depth && rec.mat_ptr->scatter(r, rec, attenuation, r)) {
 		cu_r.origin = r.origin().to_float3();
 		cu_r.direction = r.direction().to_float3();
 		s.not_absorbed *= attenuation;

@@ -33,23 +33,23 @@ material* make_diffuse_light(const vec3& e)
 	return mat;
 }
 
-inline bool scatter_lambertian(const material& mat, const ray& ray_in, const hit_record& rec, vec3& attenuation, ray& scattered)
+inline bool scatter_lambertian(const material* mat, const ray& ray_in, const hit_record& rec, vec3& attenuation, ray& scattered)
 {
 	vec3 target = rec.p + rec.normal + random_in_unit_sphere();
 	scattered = ray(rec.p, target - rec.p);
-	attenuation = mat.albedo;
+	attenuation = mat->albedo;
 	return true;
 }
 
-inline bool scatter_metal(const material& mat, const ray& r_in, const hit_record& rec, vec3& attenuation, ray& scattered)
+inline bool scatter_metal(const material* mat, const ray& r_in, const hit_record& rec, vec3& attenuation, ray& scattered)
 {
 	vec3 reflected = reflect(unit_vector(r_in.direction()), rec.normal);
-	scattered = ray(rec.p, reflected + mat.param*random_in_unit_sphere());
-	attenuation = mat.albedo;
+	scattered = ray(rec.p, reflected + mat->param*random_in_unit_sphere());
+	attenuation = mat->albedo;
 	return (dot(scattered.direction(), rec.normal) > 0);
 }
 
-inline bool scatter_dielectric(const material& mat, const ray& r_in, const hit_record& rec, vec3& attenuation, ray& scattered) {
+inline bool scatter_dielectric(const material* mat, const ray& r_in, const hit_record& rec, vec3& attenuation, ray& scattered) {
 	vec3 outward_normal;
 	vec3 reflected = reflect(r_in.direction(), rec.normal);
 	float ni_over_nt;
@@ -59,16 +59,16 @@ inline bool scatter_dielectric(const material& mat, const ray& r_in, const hit_r
 	float cosine;
 	if (dot(r_in.direction(), rec.normal) > 0) {
 		outward_normal = -rec.normal;
-		ni_over_nt = mat.param;
-		cosine = mat.param * dot(r_in.direction(), rec.normal) / r_in.direction().length();
+		ni_over_nt = mat->param;
+		cosine = mat->param * dot(r_in.direction(), rec.normal) / r_in.direction().length();
 	}
 	else {
 		outward_normal = rec.normal;
-		ni_over_nt = 1.0 / mat.param;
+		ni_over_nt = 1.0 / mat->param;
 		cosine = -dot(r_in.direction(), rec.normal) / r_in.direction().length();
 	}
 	if (refract(r_in.direction(), outward_normal, ni_over_nt, refracted)) {
-		reflect_probe = schlick(cosine, mat.param);
+		reflect_probe = schlick(cosine, mat->param);
 	}
 	else {
 		reflect_probe = 1.0;
@@ -82,16 +82,16 @@ inline bool scatter_dielectric(const material& mat, const ray& r_in, const hit_r
 	return true;
 }
 
-bool scatter(const material& mat, const ray& ray_in, const hit_record& rec, vec3& attenuation, ray& scattered)
+bool material::scatter(const ray& ray_in, const hit_record& rec, vec3& attenuation, ray& scattered) const
 {
-	switch (mat.type)
+	switch (type)
 	{
 	case LAMBERTIAN:
-		return scatter_lambertian(mat, ray_in, rec, attenuation, scattered);
+		return scatter_lambertian(this, ray_in, rec, attenuation, scattered);
 	case METAL:
-		return scatter_metal(mat, ray_in, rec, attenuation, scattered);
+		return scatter_metal(this, ray_in, rec, attenuation, scattered);
 	case DIELECTRIC:
-		return scatter_dielectric(mat, ray_in, rec, attenuation, scattered);
+		return scatter_dielectric(this, ray_in, rec, attenuation, scattered);
 	default:
 		// should never happen
 		return false;
