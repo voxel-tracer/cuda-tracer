@@ -116,8 +116,7 @@ struct window {
 	}
 };
 
-hitable_list*
-random_scene()
+void random_scene(hitable_list **scene, camera **cam, float aspect)
 {
     int n = 500;
     hitable **list = new hitable*[n+1];
@@ -147,18 +146,8 @@ random_scene()
     list[i++] = new sphere(vec3(4, 1, 0), 1.0, make_metal(vec3(0.7, 0.6, 0.5), 0.0));
 	list[i++] = new sphere(vec3(10, 10, 10), 0.5, make_diffuse_light(vec3(200, 200, 100)));
 
-    return new hitable_list(list,i);
-}
-
-camera*
-init_camera(unsigned int nx, unsigned int ny)
-{
-    vec3 lookfrom(13,2,3);
-    vec3 lookat(0,0,0);
-    float dist_to_focus = 10.0;
-    float aperture = 0.1;
-
-    return new camera(lookfrom, lookat, vec3(0,1,0), 20, float(nx)/float(ny), aperture, dist_to_focus);
+	*scene = new hitable_list(list, i);
+	*cam = new camera(vec3(13, 2, 3), vec3(0, 0, 0), vec3(0, 1, 0), 20, aspect, 0.1, 10.0);
 }
 
 /**
@@ -174,9 +163,11 @@ int main(int argc, char** argv)
 	const int nx = 600;
 	const int ny = 300;
 	const int ns = 10000;
-	hitable_list *world = random_scene();
-
-	camera *cam = init_camera(nx, ny);
+	hitable_list *world;
+	camera *cam;
+	
+	random_scene(&world, &cam, float(nx) / float(ny));
+	
 	renderer r(cam, world, nx, ny, ns, 50, 0.001);
 	r.prepare_kernel();
 
