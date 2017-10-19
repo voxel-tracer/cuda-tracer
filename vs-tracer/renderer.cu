@@ -7,8 +7,9 @@
 #include "renderer.h"
 #include "sphere.h"
 #include "device_launch_parameters.h"
+#include "pdf.h"
 
-
+#define DBG_IDX	-1 //42091
 
 void err(cudaError_t err, char *msg)
 {
@@ -52,6 +53,7 @@ inline void renderer::generate_ray(int ray_idx, int x, int y)
 	cam->get_ray(u, v, h_rays[ray_idx]);
 	samples[ray_idx].depth = 0;
 	samples[ray_idx].pixelId = (ny - y - 1)*nx + x;
+	h_rays[ray_idx].pixelId = samples[ray_idx].pixelId;
 }
 
 void renderer::prepare_kernel()
@@ -136,10 +138,11 @@ bool renderer::color(int ray_idx) {
 	cu_ray& cu_r = h_rays[ray_idx];
 	const cu_hit& hit = h_hits[ray_idx];
 	sample& s = samples[ray_idx];
-
 	ray r = ray(vec3(cu_r.origin), vec3(cu_r.direction));
 
 	if (hit.hit_idx == -1) {
+		if (s.pixelId == DBG_IDX)	printf("NO_HIT\n");
+
 		// no intersection with spheres, return sky color
 		vec3 unit_direction = unit_vector(r.direction());
 		float t = 0.5*(unit_direction.y() + 1.0);
@@ -156,14 +159,32 @@ bool renderer::color(int ray_idx) {
 	rec.normal = (rec.p - sphr->center) / sphr->radius;
 	rec.mat_ptr = sphr->mat_ptr;
 
-	vec3 attenuation;
-	const vec3& emitted = rec.mat_ptr->emitted;
+	ray scattered;
+	float pdf_val;
+	vec3 albedo;
+	const vec3& emitted = rec.mat_ptr->emitted(r, rec, rec.p);
 	s.color += s.not_absorbed*emitted;
-	if ((++s.depth) <= max_depth && rec.mat_ptr->scatter(r, rec, attenuation, r)) {
-		cu_r.origin = r.origin().to_float3();
-		cu_r.direction = r.direction().to_float3();
-		s.not_absorbed *= attenuation;
-		return true;
+	if (s.pixelId==DBG_IDX && s.color.squared_length() > 10)
+		printf("white acne at %d\n", s.pixelId);
+	if (s.pixelId == DBG_IDX) printf("emitted=(%.2f,%.2f,%.2f), not_absorbed=%.6f\n", emitted[0], emitted[1], emitted[2], s.not_absorbed.squared_length());
+	if ((++s.depth) <= max_depth && rec.mat_ptr->scatter(r, rec, albedo, scattered, pdf_val)) {
+		sphere *light_shape = new sphere(vec3(10,10,10), .5, NULL);
+		light_shape->sphere_dbg = s.pixelId == DBG_IDX;
+		hitable_pdf p0(light_shape, rec.p);
+		cosine_density p1(rec.normal);
+		mixture_pdf p(&p0, &p1);
+		scattered = ray(rec.p, p.generate());
+		pdf_val = p.value(scattered.direction());
+		if (pdf_val > 0) {
+			cu_r.origin = scattered.origin().to_float3();
+			cu_r.direction = scattered.direction().to_float3();
+			float scattering_pdf = rec.mat_ptr->scattering_pdf(r, rec, scattered);
+			s.not_absorbed *= albedo* scattering_pdf / pdf_val;
+			if (s.pixelId == DBG_IDX) printf("  pdf_val= %.6f, albedo= (%.2f, %.2f, %.2f), scattering_pdf= .2f, not_absorbed= .6%, hitable_pdf= %.2f, cosine_density= .2f\n", 
+				pdf_val, albedo.x(), albedo.y(), albedo.z(), scattering_pdf, s.not_absorbed.squared_length(), p0.value(scattered.direction()), p1.value(scattered.direction()));
+			r = scattered;
+			return true;
+		}
 	}
 
 	return false;
@@ -191,12 +212,19 @@ hit_scene(const cu_ray* rays, const unsigned int num_rays, const cu_sphere* scen
 
 		float3 oc = make_float3(ro.x - sc.x, ro.y - sc.y, ro.z - sc.z);
 		float a = rd.x*rd.x + rd.y*rd.y + rd.z*rd.z;
-		float b = 2.0f * (oc.x*rd.x + oc.y*rd.y + oc.z*rd.z);
-		float c = oc.x*oc.x + oc.y*oc.y + oc.z*oc.z - sr*sr;
-		float discriminant = b*b - 4 * a*c;
-		if (discriminant > 0)
-		{
-			float t = (-b - sqrtf(discriminant)) / (2.0f*a);
+		float b = oc.x*rd.x + oc.y*rd.y + oc.z*rd.z;
+		float c = (oc.x*oc.x + oc.y*oc.y + oc.z*oc.z) - sr*sr;
+		float discriminant = b*b - a*c;
+		if (discriminant > 0.001) {
+			float t = (-b - sqrtf(discriminant)) / a;
+			if (r->pixelId == DBG_IDX && s == 4) printf("hit_scene: a %.6f, b %.6f, c %.6f, d %.6f, t %.6f\n", a, b, c, discriminant, t);
+			if (t < closest_hit && t > t_min) {
+				closest_hit = t;
+				hit_idx = s;
+				continue;
+			}
+			t = (-b + sqrtf(discriminant)) / a;
+			if (r->pixelId == DBG_IDX && s == 4) printf("hit_scene: a %.6f, b %.6f, c %.6f, d %.6f, t %.6f\n", a, b, c, discriminant, t);
 			if (t < closest_hit && t > t_min) {
 				closest_hit = t;
 				hit_idx = s;
@@ -204,6 +232,7 @@ hit_scene(const cu_ray* rays, const unsigned int num_rays, const cu_sphere* scen
 		}
 	}
 
+	if (r->pixelId == DBG_IDX) printf("hit_scene: hit_idx %d, closest_hit %.2f\n", hit_idx, closest_hit);
 	hits[i].hit_t = closest_hit;
 	hits[i].hit_idx = hit_idx;
 }
@@ -238,7 +267,7 @@ void renderer::compact_rays()
 	for (unsigned int i = 0; i < num_rays; ++i)
 	{
 		const unsigned int pixelId = samples[i].pixelId;
-		if (color(i) && samples[i].not_absorbed.squared_length() > min_attenuation)
+		if (color(i) /*&& samples[i].not_absorbed.squared_length() > min_attenuation*/)
 		{
 			// compact ray
 			h_rays[ray_idx] = h_rays[i];
@@ -250,6 +279,7 @@ void renderer::compact_rays()
 			// ray is no longer active, cumulate its color
 			h_colors[pixelId] += samples[i].color;
 			++(pixels[pixelId].done);
+			if (pixelId == DBG_IDX) printf("sample done\n");
 		}
 	}
 	compact += clock() - start;

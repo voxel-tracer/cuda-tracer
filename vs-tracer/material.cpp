@@ -1,4 +1,5 @@
 #include "material.h"
+#include "onb.h"
 
 
 material* make_lambertian(const vec3& a)
@@ -29,16 +30,29 @@ material* make_dielectric(float ref_idx)
 material* make_diffuse_light(const vec3& e)
 {
 	material *mat = new material();
-	mat->emitted = e;
+	mat->type = DIFFUSE_LIGHT;
+	mat->_emitted = e;
 	return mat;
 }
 
-inline bool scatter_lambertian(const material* mat, const ray& ray_in, const hit_record& rec, vec3& attenuation, ray& scattered)
+inline bool scatter_lambertian(const material* mat, const ray& ray_in, const hit_record& rec, vec3& alb, ray& scattered, float& pdf)
 {
-	vec3 target = rec.p + rec.normal + random_in_unit_sphere();
-	scattered = ray(rec.p, target - rec.p);
-	attenuation = mat->albedo;
-	return true;
+	onb uvw;
+	uvw.build_from_w(rec.normal);
+	vec3 direction = uvw.local(random_cosine_direction());
+	scattered = ray(rec.p, unit_vector(direction));
+	alb = mat->albedo;
+	pdf = dot(uvw.w(), scattered.direction()) / M_PI;
+
+	//vec3 direction;
+	//do {
+	//	direction = random_in_unit_sphere();
+	//} while (dot(direction, rec.normal) < 0);
+	//scattered = ray(rec.p, unit_vector(direction));
+	//alb = mat->albedo;
+	//pdf = 0.5 / M_PI;
+
+	return pdf > 0;
 }
 
 inline bool scatter_metal(const material* mat, const ray& r_in, const hit_record& rec, vec3& attenuation, ray& scattered)
@@ -82,12 +96,12 @@ inline bool scatter_dielectric(const material* mat, const ray& r_in, const hit_r
 	return true;
 }
 
-bool material::scatter(const ray& ray_in, const hit_record& rec, vec3& attenuation, ray& scattered) const
+bool material::scatter(const ray& ray_in, const hit_record& rec, vec3& attenuation, ray& scattered, float& pdf) const
 {
 	switch (type)
 	{
 	case LAMBERTIAN:
-		return scatter_lambertian(this, ray_in, rec, attenuation, scattered);
+		return scatter_lambertian(this, ray_in, rec, attenuation, scattered, pdf);
 	case METAL:
 		return scatter_metal(this, ray_in, rec, attenuation, scattered);
 	case DIELECTRIC:
@@ -96,4 +110,25 @@ bool material::scatter(const ray& ray_in, const hit_record& rec, vec3& attenuati
 		// should never happen
 		return false;
 	}
+}
+
+float lambertian_scattering_pdf(const material* mat, const ray& r_in, const hit_record& rec, const ray& scattered) {
+	float cosine = dot(rec.normal, unit_vector(scattered.direction()));
+	if (cosine < 0) return 0;
+	return cosine / M_PI;
+}
+
+float material::scattering_pdf(const ray& r_in, const hit_record& rec, const ray& scattered) const
+{
+	if (type == LAMBERTIAN)
+		return lambertian_scattering_pdf(this, r_in, rec, scattered);
+	return 0;
+}
+
+vec3 material::emitted(const ray& r_in, const hit_record& rec, const vec3& p) const {
+	if (type == DIFFUSE_LIGHT) {
+		if (dot(rec.normal, r_in.direction()) < 0.0)
+			return _emitted;
+	}
+	return vec3(0, 0, 0);
 }

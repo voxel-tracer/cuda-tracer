@@ -23,6 +23,8 @@
     <ClInclude Include="hitable.h" />
     <ClInclude Include="hitable_list.h" />
     <ClInclude Include="material.h" />
+    <ClInclude Include="onb.h" />
+    <ClInclude Include="pdf.h" />
     <ClInclude Include="ray.h" />
     <ClInclude Include="renderer.h" />
     <ClInclude Include="resource.h" />

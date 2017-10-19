@@ -10,16 +10,19 @@ enum materialType
 {
 	LAMBERTIAN,
 	METAL,
-	DIELECTRIC
+	DIELECTRIC,
+	DIFFUSE_LIGHT
 };
 
 struct material 
 {
 	materialType type;
 	vec3 albedo;
-	vec3 emitted;
+	vec3 _emitted;
 	float param;
-	bool scatter(const ray& ray_in, const hit_record& rec, vec3& attenuation, ray& scattered) const;
+	bool scatter(const ray& ray_in, const hit_record& rec, vec3& attenuation, ray& scattered, float& pdf) const;
+	vec3 emitted(const ray& r_in, const hit_record& rec, const vec3 &p) const;
+	float scattering_pdf(const ray& r_in, const hit_record& rec, const ray& scattered) const;
 };
 
 material* make_lambertian(const vec3& a);

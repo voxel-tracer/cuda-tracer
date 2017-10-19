@@ -6,7 +6,8 @@
 class ray {
 public:
 	ray() {}
-	ray(const vec3& a, const vec3& b) { A = a; B = b;}
+	ray(const vec3& a, const vec3& b) { A = a; B = b; }
+	ray(const ray& r) { A = r.A; B = r.B; }
 	const vec3& origin() const { return A; }
 	const vec3& direction() const { return B; }
 	vec3 point_at_parameter(float t) const { return A + t*B; }
@@ -16,11 +17,12 @@ public:
 };
 
 struct cu_ray {
+	unsigned int pixelId;
 	float3 origin;
 	float3 direction;
 
 	cu_ray() {}
-	cu_ray(cu_ray& r) { origin = r.origin; direction = r.direction; }
+	cu_ray(cu_ray& r) { pixelId = r.pixelId; origin = r.origin; direction = r.direction; }
 };
 
 struct sample {

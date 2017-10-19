@@ -116,6 +116,31 @@ struct window {
 	}
 };
 
+void only_lambertians(hitable_list **scene, camera **cam, float aspect)
+{
+	int n = 500;
+	hitable **list = new hitable*[n + 1];
+	int i = 0;
+	list[i++] = new sphere(vec3(0, -1000, 0), 1000, make_lambertian(vec3(0.5, 0.5, 0.5)));
+	for (int a = -11; a < 11; a++) {
+		for (int b = -11; b < 11; b++) {
+			float choose_mat = drand48();
+			vec3 center(a + 0.9*drand48(), 0.2, b + 0.9*drand48());
+			if ((center - vec3(4, 0.2, 0)).length() > 0.9) {
+				list[i++] = new sphere(center, 0.2, make_lambertian(vec3(drand48()*drand48(), drand48()*drand48(), drand48()*drand48())));
+			}
+		}
+	}
+
+	list[i++] = new sphere(vec3(0, 1, 0), 1.0, make_lambertian(vec3(0.8, 0.8, 0.8)));
+	list[i++] = new sphere(vec3(-4, 1, 0), 1.0, make_lambertian(vec3(0.4, 0.2, 0.1)));
+	list[i++] = new sphere(vec3(4, 1, 0), 1.0, make_lambertian(vec3(0.7, 0.6, 0.5)));
+	list[i++] = new sphere(vec3(10, 10, 10), 0.5, make_diffuse_light(vec3(200, 200, 175)));
+
+	*scene = new hitable_list(list, i);
+	*cam = new camera(vec3(13, 2, 3), vec3(0, 0, 0), vec3(0, 1, 0), 20, aspect, 0.1, 10.0);
+}
+
 void random_scene(hitable_list **scene, camera **cam, float aspect)
 {
     int n = 500;
@@ -144,7 +169,7 @@ void random_scene(hitable_list **scene, camera **cam, float aspect)
     list[i++] = new sphere(vec3(0, 1, 0), 1.0, make_dielectric(1.5));
     list[i++] = new sphere(vec3(-4, 1, 0), 1.0, make_lambertian(vec3(0.4, 0.2, 0.1)));
     list[i++] = new sphere(vec3(4, 1, 0), 1.0, make_metal(vec3(0.7, 0.6, 0.5), 0.0));
-	list[i++] = new sphere(vec3(10, 10, 10), 0.5, make_diffuse_light(vec3(200, 200, 100)));
+	list[i++] = new sphere(vec3(10, 10, 10), .5, make_diffuse_light(vec3(2, 2, 1)));
 
 	*scene = new hitable_list(list, i);
 	*cam = new camera(vec3(13, 2, 3), vec3(0, 0, 0), vec3(0, 1, 0), 20, aspect, 0.1, 10.0);
@@ -156,17 +181,17 @@ void random_scene(hitable_list **scene, camera **cam, float aspect)
 int main(int argc, char** argv)
 {
 	bool print_progress = false;
-	bool write_image = false;
-	bool show_window = true;
+	bool write_image = true;
+	bool show_window = false;
 
 	const unsigned int scene_size = 500;
 	const int nx = 600;
 	const int ny = 300;
-	const int ns = 10000;
+	const int ns = 1000;
 	hitable_list *world;
 	camera *cam;
 	
-	random_scene(&world, &cam, float(nx) / float(ny));
+	only_lambertians(&world, &cam, float(nx) / float(ny));
 	
 	renderer r(cam, world, nx, ny, ns, 50, 0.001);
 	r.prepare_kernel();
@@ -180,10 +205,10 @@ int main(int argc, char** argv)
 
 	unsigned int iteration = 0;
 	unsigned int total_rays = 0;
+	bool rendering = true;
 	while ((show_window && !w->quit) || (!show_window && r.numrays() > 0))
 	{
-		if (r.numrays() > 0)
-		{
+		if (r.numrays() > 0) {
 			total_rays += r.numrays();
 			if (print_progress && iteration % 100 == 0)
 			{
@@ -195,11 +220,18 @@ int main(int argc, char** argv)
 			r.run_kernel();
 			// compact active rays
 			r.compact_rays();
+		} else if (rendering) {
+			rendering = false;
+			w->set_title("Voxel Tracer");
 		}
 
 		if (show_window) {
 			w->update_pixels();
 			w->poll_events();
+			if (!rendering && r.numrays() > 0) {
+				rendering = true;
+				w->set_title("Voxel Tracer (rendering)");
+			}
 		}
 
 		++iteration;
@@ -246,4 +278,3 @@ int main(int argc, char** argv)
 
     return 0;
 }
-
