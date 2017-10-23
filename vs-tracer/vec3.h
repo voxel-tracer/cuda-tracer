@@ -47,7 +47,9 @@ public:
     float e[3];
 };
 
-
+inline vec3 hex2vec3(const int hexval) {
+	return vec3(((hexval >> 16) & 0xFF) / 255.0, ((hexval >> 8) & 0xFF) / 255.0, (hexval & 0xFF) / 255.0);
+}
 
 inline std::istream& operator>>(std::istream &is, vec3 &t) {
     is >> t.e[0] >> t.e[1] >> t.e[2];

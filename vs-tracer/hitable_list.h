@@ -22,6 +22,17 @@ class hitable_list: public hitable {
 
 		hitable **list;
 		int list_size;
+		virtual float pdf_value(const vec3& o, const vec3& v) const {
+			float weight = 1.0 / list_size;
+			float sum = 0;
+			for (int i = 0; i < list_size; i++)
+				sum += weight*list[i]->pdf_value(o, v);
+			return sum;
+		}
+		virtual vec3 random(const vec3& o) const {
+			int index = int(drand48() * list_size);
+			return list[index]->random(o);
+		}
 };
 
 #endif /* HITABLE_LIST_H_ */

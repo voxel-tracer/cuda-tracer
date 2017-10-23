@@ -3,6 +3,7 @@
 
 #include <vector_functions.hpp>
 #include "ray.h"
+#include "pdf.h"
 #include "hitable.h"
 #include "utils.h"
 
@@ -14,15 +15,23 @@ enum materialType
 	DIFFUSE_LIGHT
 };
 
+struct scatter_record
+{
+	ray specular_ray;
+	bool is_specular;
+	vec3 attenuation;
+	pdf *pdf_ptr;
+};
+
 struct material 
 {
 	materialType type;
 	vec3 albedo;
 	vec3 _emitted;
 	float param;
-	bool scatter(const ray& ray_in, const hit_record& rec, vec3& attenuation, ray& scattered, float& pdf) const;
-	vec3 emitted(const ray& r_in, const hit_record& rec, const vec3 &p) const;
+	bool scatter(const ray& ray_in, const hit_record& rec, scatter_record& srec) const;
 	float scattering_pdf(const ray& r_in, const hit_record& rec, const ray& scattered) const;
+	vec3 emitted(const ray& r_in, const hit_record& rec, const vec3 &p) const;
 };
 
 material* make_lambertian(const vec3& a);

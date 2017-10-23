@@ -5,6 +5,9 @@
 #include <ctime>
 #include <SDL.h>
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
 // For the CUDA runtime routines (prefixed with "cuda_")
 //#include <cuda_runtime.h>
 //#include <cuda_profiler_api.h>
@@ -34,7 +37,7 @@ struct window {
 	renderer& w_r;
 	camera *w_cam;
 
-	window(int nx, int ny, renderer &r, camera *cam): w_nx(nx), w_ny(ny), w_r(r), w_cam(cam) {
+	window(int nx, int ny, float t, float p, renderer &r, camera *cam): w_nx(nx), w_ny(ny), w_r(r), w_cam(cam), theta(t), phi(p) {
 		SDL_Init(SDL_INIT_VIDEO);
 
 		w_screen = SDL_CreateWindow("Voxel Tracer (rendering)", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, nx, ny, 0);
@@ -90,6 +93,7 @@ struct window {
 					if (theta >(M_PI_2 - delta)) theta = M_PI_2 - delta;
 					phi += -mx*delta;
 					w_cam->look_from(theta, phi);
+					printf("look_from(%f, %f)\n", theta, phi);
 					w_r.update_camera();
 				}
 				break;
@@ -116,26 +120,37 @@ struct window {
 	}
 };
 
-void only_lambertians(hitable_list **scene, camera **cam, float aspect)
+void only_lambertians(hitable_list **scene, camera **cam, hitable **light_shape, float aspect)
 {
+	const int palette[] = { 0xe65d3e, 0xf1a26d, 0xfeda4b, 0xfefba8 };
+	const int palette_size = 5;
 	int n = 500;
 	hitable **list = new hitable*[n + 1];
 	int i = 0;
-	list[i++] = new sphere(vec3(0, -1000, 0), 1000, make_lambertian(vec3(0.5, 0.5, 0.5)));
+	list[i++] = new sphere(vec3(0, -1000, 0), 1000, make_lambertian(hex2vec3(0x5b180c)));
 	for (int a = -11; a < 11; a++) {
 		for (int b = -11; b < 11; b++) {
 			float choose_mat = drand48();
 			vec3 center(a + 0.9*drand48(), 0.2, b + 0.9*drand48());
 			if ((center - vec3(4, 0.2, 0)).length() > 0.9) {
-				list[i++] = new sphere(center, 0.2, make_lambertian(vec3(drand48()*drand48(), drand48()*drand48(), drand48()*drand48())));
+				list[i++] = new sphere(center, 0.2, make_lambertian(hex2vec3(palette[int(drand48()*(palette_size - 1))])));
 			}
 		}
 	}
 
-	list[i++] = new sphere(vec3(0, 1, 0), 1.0, make_lambertian(vec3(0.8, 0.8, 0.8)));
-	list[i++] = new sphere(vec3(-4, 1, 0), 1.0, make_lambertian(vec3(0.4, 0.2, 0.1)));
-	list[i++] = new sphere(vec3(4, 1, 0), 1.0, make_lambertian(vec3(0.7, 0.6, 0.5)));
-	list[i++] = new sphere(vec3(10, 10, 10), 0.5, make_diffuse_light(vec3(200, 200, 175)));
+	list[i++] = new sphere(vec3(-4, 1, 0), 1.0, make_lambertian(hex2vec3(palette[int(drand48()*palette_size)])));
+	list[i++] = new sphere(vec3(0, 1, 0), 1.0, make_lambertian(hex2vec3(palette[int(drand48()*palette_size)])));
+	//hitable *glass = new sphere(vec3(0, 1, 0), 1.0, make_dielectric(1.5));
+	//list[i++] = glass;
+	list[i++] = new sphere(vec3(4, 1, 0), 1.0, make_lambertian(hex2vec3(palette[int(drand48()*palette_size)])));
+	hitable *light = new sphere(vec3(10, 10, 10), .5, make_diffuse_light(vec3(100, 100, 100)));
+	list[i++] = light;
+
+	//hitable *a[2];
+	//a[0] = light;
+	//a[1] = glass;
+	//*light_shape = new hitable_list(a, 2);
+	*light_shape = light;
 
 	*scene = new hitable_list(list, i);
 	*cam = new camera(vec3(13, 2, 3), vec3(0, 0, 0), vec3(0, 1, 0), 20, aspect, 0.1, 10.0);
@@ -169,7 +184,7 @@ void random_scene(hitable_list **scene, camera **cam, float aspect)
     list[i++] = new sphere(vec3(0, 1, 0), 1.0, make_dielectric(1.5));
     list[i++] = new sphere(vec3(-4, 1, 0), 1.0, make_lambertian(vec3(0.4, 0.2, 0.1)));
     list[i++] = new sphere(vec3(4, 1, 0), 1.0, make_metal(vec3(0.7, 0.6, 0.5), 0.0));
-	list[i++] = new sphere(vec3(10, 10, 10), .5, make_diffuse_light(vec3(2, 2, 1)));
+	list[i++] = new sphere(vec3(10, 10, 10), .5, make_diffuse_light(vec3(20, 20, 10)));
 
 	*scene = new hitable_list(list, i);
 	*cam = new camera(vec3(13, 2, 3), vec3(0, 0, 0), vec3(0, 1, 0), 20, aspect, 0.1, 10.0);
@@ -190,15 +205,19 @@ int main(int argc, char** argv)
 	const int ns = 1000;
 	hitable_list *world;
 	camera *cam;
-	
-	only_lambertians(&world, &cam, float(nx) / float(ny));
-	
-	renderer r(cam, world, nx, ny, ns, 50, 0.001);
+	hitable *light_shape;
+	only_lambertians(&world, &cam, &light_shape, float(nx) / float(ny));
+
+	const float theta = 1.221730;
+	const float phi = 1.832596;
+	cam->look_from(theta, phi);
+
+	renderer r(cam, world, light_shape, nx, ny, ns, 50, 0.001);
 	r.prepare_kernel();
 
 	window *w;
 	if (show_window) {
-		w = new window(nx, ny, r, cam);
+		w = new window(nx, ny, theta, phi, r, cam);
 	}
 
     clock_t begin = clock();
@@ -255,6 +274,7 @@ int main(int argc, char** argv)
   
 	if (write_image) {
 		// generate final image
+/*
 		ofstream image;
 		image.open("picture.ppm");
 		image << "P3\n" << nx << " " << ny << "\n255\n";
@@ -272,6 +292,19 @@ int main(int argc, char** argv)
 				image << ir << " " << ig << " " << ib << "\n";
 			}
 		}
+*/
+		char *data = new char[nx*ny * 3];
+		int idx = 0;
+		for (int y = ny-1; y >= 0; y--) {
+			for (int x = 0; x < nx; x++) {
+				vec3 col = r.get_pixel_color(x, y);
+				data[idx++] = min(255, int(255.99*col.r()));
+				data[idx++] = min(255, int(255.99*col.g()));
+				data[idx++] = min(255, int(255.99*col.b()));
+			}
+		}
+		stbi_write_png("picture.png", nx, ny, 3, (void*)data, nx * 3);
+		delete[] data;
 	}
 	
 	r.destroy();

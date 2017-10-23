@@ -141,12 +141,12 @@ bool renderer::color(int ray_idx) {
 	ray r = ray(vec3(cu_r.origin), vec3(cu_r.direction));
 
 	if (hit.hit_idx == -1) {
-		if (s.pixelId == DBG_IDX)	printf("NO_HIT\n");
+		//if (s.pixelId == DBG_IDX)	printf("NO_HIT\n");
 
 		// no intersection with spheres, return sky color
 		vec3 unit_direction = unit_vector(r.direction());
 		float t = 0.5*(unit_direction.y() + 1.0);
-		vec3 sky_clr = (1 - t)*vec3(1.0, 1.0, 1.0) + t*vec3(0.5, 0.7, 1.0);
+		vec3 sky_clr = 1.0* ((1 - t)*vec3(1.0, 1.0, 1.0) + t*vec3(0.5, 0.7, 1.0));
 		//vec3 sky_clr(0, 0, 0);
 		s.color += s.not_absorbed*sky_clr;
 		return false;
@@ -159,31 +159,34 @@ bool renderer::color(int ray_idx) {
 	rec.normal = (rec.p - sphr->center) / sphr->radius;
 	rec.mat_ptr = sphr->mat_ptr;
 
-	ray scattered;
-	float pdf_val;
-	vec3 albedo;
+	scatter_record srec;
 	const vec3& emitted = rec.mat_ptr->emitted(r, rec, rec.p);
 	s.color += s.not_absorbed*emitted;
-	if (s.pixelId==DBG_IDX && s.color.squared_length() > 10)
-		printf("white acne at %d\n", s.pixelId);
-	if (s.pixelId == DBG_IDX) printf("emitted=(%.2f,%.2f,%.2f), not_absorbed=%.6f\n", emitted[0], emitted[1], emitted[2], s.not_absorbed.squared_length());
-	if ((++s.depth) <= max_depth && rec.mat_ptr->scatter(r, rec, albedo, scattered, pdf_val)) {
-		sphere *light_shape = new sphere(vec3(10,10,10), .5, NULL);
-		light_shape->sphere_dbg = s.pixelId == DBG_IDX;
-		hitable_pdf p0(light_shape, rec.p);
-		cosine_density p1(rec.normal);
-		mixture_pdf p(&p0, &p1);
-		scattered = ray(rec.p, p.generate());
-		pdf_val = p.value(scattered.direction());
-		if (pdf_val > 0) {
-			cu_r.origin = scattered.origin().to_float3();
-			cu_r.direction = scattered.direction().to_float3();
-			float scattering_pdf = rec.mat_ptr->scattering_pdf(r, rec, scattered);
-			s.not_absorbed *= albedo* scattering_pdf / pdf_val;
-			if (s.pixelId == DBG_IDX) printf("  pdf_val= %.6f, albedo= (%.2f, %.2f, %.2f), scattering_pdf= .2f, not_absorbed= .6%, hitable_pdf= %.2f, cosine_density= .2f\n", 
-				pdf_val, albedo.x(), albedo.y(), albedo.z(), scattering_pdf, s.not_absorbed.squared_length(), p0.value(scattered.direction()), p1.value(scattered.direction()));
-			r = scattered;
+	//if (s.pixelId==DBG_IDX && s.color.squared_length() > 10) printf("white acne at %d\n", s.pixelId);
+	//if (s.pixelId == DBG_IDX) printf("emitted=(%.2f,%.2f,%.2f), not_absorbed=%.6f\n", emitted[0], emitted[1], emitted[2], s.not_absorbed.squared_length());
+	if ((++s.depth) <= max_depth && rec.mat_ptr->scatter(r, rec, srec)) {
+		if (srec.is_specular) {
+			r = srec.specular_ray;
+			cu_r.origin = r.origin().to_float3();
+			cu_r.direction = r.direction().to_float3();
+			s.not_absorbed *= srec.attenuation;
 			return true;
+		}
+		else {
+			//light_shape->sphere_dbg = s.pixelId == DBG_IDX;
+			hitable_pdf plight(light_shape, rec.p);
+			mixture_pdf p(&plight, srec.pdf_ptr);
+			//const pdf &p = *(srec.pdf_ptr);
+			ray scattered = ray(rec.p, p.generate());
+			float pdf_val = p.value(scattered.direction());
+			if (pdf_val > 0) {
+				cu_r.origin = scattered.origin().to_float3();
+				cu_r.direction = scattered.direction().to_float3();
+				float scattering_pdf = rec.mat_ptr->scattering_pdf(r, rec, scattered);
+				s.not_absorbed *= srec.attenuation* scattering_pdf / pdf_val;
+				r = scattered;
+				return true;
+			}
 		}
 	}
 
@@ -215,7 +218,7 @@ hit_scene(const cu_ray* rays, const unsigned int num_rays, const cu_sphere* scen
 		float b = oc.x*rd.x + oc.y*rd.y + oc.z*rd.z;
 		float c = (oc.x*oc.x + oc.y*oc.y + oc.z*oc.z) - sr*sr;
 		float discriminant = b*b - a*c;
-		if (discriminant > 0.001) {
+		if (discriminant > 0.01) {
 			float t = (-b - sqrtf(discriminant)) / a;
 			if (r->pixelId == DBG_IDX && s == 4) printf("hit_scene: a %.6f, b %.6f, c %.6f, d %.6f, t %.6f\n", a, b, c, discriminant, t);
 			if (t < closest_hit && t > t_min) {

@@ -14,7 +14,7 @@ class sphere: public hitable {
 			float b = dot(oc, r.direction());
 			float c = dot(oc, oc) - radius*radius;
 			float discriminant = b*b - a*c;
-			if (sphere_dbg) printf("sphere_hit: a %.6f, b %.6f, c %.6f, d %.6f\n", a, b, c, discriminant);
+			//if (sphere_dbg) printf("sphere_hit: a %.6f, b %.6f, c %.6f, d %.6f\n", a, b, c, discriminant);
 			if (discriminant > 0) {
 				float temp = (-b - sqrt(b*b - a*c)) / a;
 				if (temp < t_max && temp > t_min) {
@@ -55,7 +55,6 @@ class sphere: public hitable {
 		vec3 center;
 		float radius;
 		const material *mat_ptr;
-		bool sphere_dbg;
 };
 
 struct cu_sphere {

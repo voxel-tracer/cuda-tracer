@@ -22,7 +22,7 @@ struct pixel {
 
 class renderer {
 public:
-	renderer(camera* _cam, hitable_list* w, unsigned int _nx, unsigned int _ny, unsigned int _ns, unsigned int _max_depth, float _min_attenuation) { 
+	renderer(camera* _cam, hitable_list* w, hitable *ls, unsigned int _nx, unsigned int _ny, unsigned int _ns, unsigned int _max_depth, float _min_attenuation) { 
 		cam = _cam;
 		world = w;
 		nx = _nx; 
@@ -30,6 +30,7 @@ public:
 		ns = _ns;
 		max_depth = _max_depth;
 		min_attenuation = _min_attenuation;
+		light_shape = ls;
 	}
 
 	unsigned int numpixels() const { return nx*ny; }
@@ -75,6 +76,7 @@ public:
 
 	unsigned int num_rays;
 private:
+	hitable *light_shape;
 	int* pixel_idx;
 	sample* samples;
 	inline void generate_ray(int ray_idx, int x, int y);
