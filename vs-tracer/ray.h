@@ -3,26 +3,16 @@
 
 #include "utils.h"
 
-class ray {
-public:
-	ray() {}
-	ray(const float3& a, const float3& b) { A = a; B = b; }
-	ray(const ray& r) { A = r.A; B = r.B; }
-	const float3& origin() const { return A; }
-	const float3& direction() const { return B; }
-	float3 point_at_parameter(float t) const { return A + t*B; }
-
-	float3 A;
-	float3 B;
-};
-
-struct cu_ray {
+struct ray {
 	unsigned int pixelId;
 	float3 origin;
 	float3 direction;
 
-	cu_ray() {}
-	cu_ray(cu_ray& r) { pixelId = r.pixelId; origin = r.origin; direction = r.direction; }
+	ray() {}
+	ray(const float3& o, const float3& d) { origin = o; direction = d; }
+	ray(ray& r) { pixelId = r.pixelId; origin = r.origin; direction = r.direction; }
+
+	float3 point_at_parameter(float t) const { return origin + t*direction; }
 };
 
 struct sample {

@@ -64,7 +64,7 @@ void renderer::prepare_kernel()
 	
 	pixels = new pixel[num_pixels];
 	samples = new sample[num_pixels];
-	h_rays = new cu_ray[num_pixels];
+	h_rays = new ray[num_pixels];
 	h_colors = new float3[num_pixels];
 	h_hits = new cu_hit[num_pixels];
 	pixel_idx = new int[num_pixels];
@@ -74,7 +74,7 @@ void renderer::prepare_kernel()
 	err(cudaMalloc((void **)&d_scene, scene_size * sizeof(cu_sphere)), "allocate device d_scene");
 
     d_rays = NULL;
-	err(cudaMalloc((void **)&d_rays, num_pixels * sizeof(cu_ray)), "allocate device d_rays");
+	err(cudaMalloc((void **)&d_rays, num_pixels * sizeof(ray)), "allocate device d_rays");
 
     d_hits = NULL;
 	err(cudaMalloc((void **)&d_hits, num_pixels * sizeof(cu_hit)), "allocate device d_hits");
@@ -124,7 +124,7 @@ void renderer::update_camera()
 	num_rays = num_pixels;
 }
 
-cu_ray* renderer::generate_rays(cu_ray* rays)
+ray* renderer::generate_rays(ray* rays)
 {
 	unsigned int ray_idx = 0;
 	for (int j = ny - 1; j >= 0; j--)
@@ -135,16 +135,16 @@ cu_ray* renderer::generate_rays(cu_ray* rays)
 }
 
 bool renderer::color(int ray_idx) {
-	cu_ray& cu_r = h_rays[ray_idx];
+	ray& cu_r = h_rays[ray_idx];
 	const cu_hit& hit = h_hits[ray_idx];
 	sample& s = samples[ray_idx];
-	ray r = ray(cu_r.origin, cu_r.direction);
+	ray r = ray(cu_r);
 
 	if (hit.hit_idx == -1) {
 		//if (s.pixelId == DBG_IDX)	printf("NO_HIT\n");
 
 		// no intersection with spheres, return sky color
-		float3 unit_direction = normalize(r.direction());
+		float3 unit_direction = normalize(r.direction);
 		float t = 0.5*(unit_direction.y + 1.0);
 		float3 sky_clr = 1.0* ((1 - t)*make_float3(1.0, 1.0, 1.0) + t*make_float3(0.5, 0.7, 1.0));
 		//float3 sky_clr(0, 0, 0);
@@ -165,8 +165,8 @@ bool renderer::color(int ray_idx) {
 	//if (s.pixelId==DBG_IDX && s.color.squared_length() > 10) printf("white acne at %d\n", s.pixelId);
 	//if (s.pixelId == DBG_IDX) printf("emitted=(%.2f,%.2f,%.2f), not_absorbed=%.6f\n", emitted[0], emitted[1], emitted[2], s.not_absorbed.squared_length());
 	if ((++s.depth) <= max_depth && rec.mat_ptr->scatter(r, rec, light_shape, srec)) {
-		cu_r.origin = srec.scattered.origin();
-		cu_r.direction = srec.scattered.direction();
+		cu_r.origin = srec.scattered.origin;
+		cu_r.direction = srec.scattered.direction;
 		s.not_absorbed *= srec.attenuation;
 		return true;
 	}
@@ -175,13 +175,13 @@ bool renderer::color(int ray_idx) {
 }
 
 __global__ void
-hit_scene(const cu_ray* rays, const unsigned int num_rays, const cu_sphere* scene, const unsigned int scene_size, float t_min, float t_max, cu_hit* hits)
+hit_scene(const ray* rays, const unsigned int num_rays, const cu_sphere* scene, const unsigned int scene_size, float t_min, float t_max, cu_hit* hits)
 {
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	if (i >= num_rays)
 		return;
 
-	const cu_ray *r = &(rays[i]);
+	const ray *r = &(rays[i]);
 	const float3 ro = r->origin;
 	const float3 rd = r->direction;
 
@@ -227,7 +227,7 @@ void renderer::run_kernel()
 	//clock_t start = clock();
 
 	// copying rays to device
-	err(cudaMemcpy(d_rays, h_rays, num_rays * sizeof(cu_ray), cudaMemcpyHostToDevice), "copy rays from host to device");
+	err(cudaMemcpy(d_rays, h_rays, num_rays * sizeof(ray), cudaMemcpyHostToDevice), "copy rays from host to device");
 
 	// Launch the CUDA Kernel
 	int threadsPerBlock = 128;

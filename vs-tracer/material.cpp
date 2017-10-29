@@ -42,7 +42,7 @@ inline bool scatter_lambertian(const material* mat, const ray& ray_in, const hit
 	srec.pdf_ptr = new cosine_density(hrec.normal);
 	mixture_pdf p(&plight, srec.pdf_ptr);
 	srec.scattered = ray(hrec.p, p.generate());
-	float pdf_val = p.value(srec.scattered.direction());
+	float pdf_val = p.value(srec.scattered.direction);
 	float scattering_pdf = mat->scattering_pdf(ray_in, hrec, srec.scattered);
 	srec.attenuation = mat->albedo*scattering_pdf / pdf_val;
 	return pdf_val > 0;
@@ -50,7 +50,7 @@ inline bool scatter_lambertian(const material* mat, const ray& ray_in, const hit
 
 inline bool scatter_metal(const material* mat, const ray& r_in, const hit_record& hrec, scatter_record& srec)
 {
-	float3 reflected = reflect(normalize(r_in.direction()), hrec.normal);
+	float3 reflected = reflect(normalize(r_in.direction), hrec.normal);
 	srec.scattered = ray(hrec.p, reflected + mat->param*random_to_sphere());
 	srec.attenuation = mat->albedo;
 	srec.is_specular = true;
@@ -60,7 +60,7 @@ inline bool scatter_metal(const material* mat, const ray& r_in, const hit_record
 
 inline bool scatter_dielectric(const material* mat, const ray& r_in, const hit_record& hrec, scatter_record& srec) {
 	float3 outward_normal;
-	float3 reflected = reflect(r_in.direction(), hrec.normal);
+	float3 reflected = reflect(r_in.direction, hrec.normal);
 	float ni_over_nt;
 	srec.attenuation = make_float3(1, 1, 1);
 	float3 refracted;
@@ -68,17 +68,17 @@ inline bool scatter_dielectric(const material* mat, const ray& r_in, const hit_r
 	float cosine;
 
 	srec.is_specular = true;
-	if (dot(r_in.direction(), hrec.normal) > 0) {
+	if (dot(r_in.direction, hrec.normal) > 0) {
 		outward_normal = -1*hrec.normal;
 		ni_over_nt = mat->param;
-		cosine = mat->param * dot(r_in.direction(), hrec.normal) / length(r_in.direction());
+		cosine = mat->param * dot(r_in.direction, hrec.normal) / length(r_in.direction);
 	}
 	else {
 		outward_normal = hrec.normal;
 		ni_over_nt = 1.0 / mat->param;
-		cosine = -dot(r_in.direction(), hrec.normal) / length(r_in.direction());
+		cosine = -dot(r_in.direction, hrec.normal) / length(r_in.direction);
 	}
-	if (refract(r_in.direction(), outward_normal, ni_over_nt, refracted)) {
+	if (refract(r_in.direction, outward_normal, ni_over_nt, refracted)) {
 		reflect_probe = schlick(cosine, mat->param);
 	}
 	else {
@@ -110,7 +110,7 @@ bool material::scatter(const ray& ray_in, const hit_record& rec, const hitable* 
 }
 
 float lambertian_scattering_pdf(const material* mat, const ray& r_in, const hit_record& rec, const ray& scattered) {
-	float cosine = dot(rec.normal, normalize(scattered.direction()));
+	float cosine = dot(rec.normal, normalize(scattered.direction));
 	if (cosine < 0) return 0;
 	return cosine / M_PI;
 }
@@ -124,7 +124,7 @@ float material::scattering_pdf(const ray& r_in, const hit_record& rec, const ray
 
 float3 material::emitted(const ray& r_in, const hit_record& rec, const float3& p) const {
 	if (type == DIFFUSE_LIGHT) {
-		if (dot(rec.normal, r_in.direction()) < 0.0)
+		if (dot(rec.normal, r_in.direction) < 0.0)
 			return _emitted;
 	}
 	return make_float3(0, 0, 0);

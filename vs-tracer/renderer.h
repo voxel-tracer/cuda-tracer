@@ -46,7 +46,7 @@ public:
 	void update_camera();
 
 	bool color(int ray_idx);
-	cu_ray* generate_rays(cu_ray* rays);
+	ray* generate_rays(ray* rays);
 	void run_kernel();
 	void compact_rays();
 
@@ -60,8 +60,8 @@ public:
 	unsigned int max_depth;
 	float min_attenuation;
 
-	cu_ray* h_rays;
-	cu_ray* d_rays;
+	ray* h_rays;
+	ray* d_rays;
 	cu_hit* h_hits;
 	cu_hit* d_hits;
 	cu_sphere* d_scene;

@@ -9,9 +9,9 @@ class sphere: public hitable {
 	public:
 		sphere(float3 cen, float r, const material *mat) { center = cen; radius = r; mat_ptr = mat; }
 		virtual bool hit(const ray& r, float t_min, float t_max, hit_record& rec) const {
-			float3 oc = r.origin() - center;
-			float a = dot(r.direction(), r.direction());
-			float b = dot(oc, r.direction());
+			float3 oc = r.origin - center;
+			float a = dot(r.direction, r.direction);
+			float b = dot(oc, r.direction);
 			float c = dot(oc, oc) - radius*radius;
 			float discriminant = b*b - a*c;
 			//if (sphere_dbg) printf("sphere_hit: a %.6f, b %.6f, c %.6f, d %.6f\n", a, b, c, discriminant);

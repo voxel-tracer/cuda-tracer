@@ -200,12 +200,12 @@ int main(int argc, char** argv)
 {
 	bool print_progress = false;
 	bool write_image = true;
-	bool show_window = true;
+	bool show_window = false;
 
 	const unsigned int scene_size = 500;
 	const int nx = 600;
 	const int ny = 300;
-	const int ns = 10000;
+	const int ns = 100;
 	hitable_list *world;
 	camera *cam;
 	hitable *light_shape;

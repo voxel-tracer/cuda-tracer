@@ -40,14 +40,6 @@ public:
 		float3 rd = lens_radius*random_in_unit_disk();
 		float3 offset = u*rd.x + v*rd.y;
 
-		r.A = origin + offset;
-		r.B = lower_left_corner + s*horizontal + t*vertical - origin - offset;
-	}
-
-	void get_ray(float s, float t, cu_ray& r) const {
-		float3 rd = lens_radius*random_in_unit_disk();
-		float3 offset = u*rd.x + v*rd.y;
-
 		r.origin = origin + offset;
 		r.direction = lower_left_corner + s*horizontal + t*vertical - origin - offset;
 	}
