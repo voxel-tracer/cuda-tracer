@@ -28,7 +28,7 @@ init_cu_scene(const hitable_list* world)
 	for (int i = 0; i < size; i++)
 	{
 		const sphere *s = (sphere*)world->list[i];
-		scene[i].center = make_float3(s->center.x(), s->center.y(), s->center.z());
+		scene[i].center = make_float3(s->center.x, s->center.y, s->center.z);
 		scene[i].radius = s->radius;
 	}
 
@@ -65,7 +65,7 @@ void renderer::prepare_kernel()
 	pixels = new pixel[num_pixels];
 	samples = new sample[num_pixels];
 	h_rays = new cu_ray[num_pixels];
-	h_colors = new vec3[num_pixels];
+	h_colors = new float3[num_pixels];
 	h_hits = new cu_hit[num_pixels];
 	pixel_idx = new int[num_pixels];
 	
@@ -85,8 +85,8 @@ void renderer::prepare_kernel()
 	// set temporary variables
 	for (int i = 0; i < num_pixels; i++)
 	{
-		samples[i].color = vec3(0, 0, 0);
-		samples[i].not_absorbed = vec3(1, 1, 1);
+		samples[i].color = make_float3(0, 0, 0);
+		samples[i].not_absorbed = make_float3(1, 1, 1);
 		pixels[i].id = i;
 		pixels[i].samples = 1;
 		pixel_idx[i] = i;
@@ -109,9 +109,9 @@ void renderer::update_camera()
 	// set temporary variables
 	for (int i = 0; i < num_pixels; i++)
 	{
-		h_colors[i] = vec3(0, 0, 0);
-		samples[i].color = vec3(0, 0, 0);
-		samples[i].not_absorbed = vec3(1, 1, 1);
+		h_colors[i] = make_float3(0, 0, 0);
+		samples[i].color = make_float3(0, 0, 0);
+		samples[i].not_absorbed = make_float3(1, 1, 1);
 		pixels[i].id = i;
 		pixels[i].samples = 1;
 		pixels[i].done = 0;
@@ -138,16 +138,16 @@ bool renderer::color(int ray_idx) {
 	cu_ray& cu_r = h_rays[ray_idx];
 	const cu_hit& hit = h_hits[ray_idx];
 	sample& s = samples[ray_idx];
-	ray r = ray(vec3(cu_r.origin), vec3(cu_r.direction));
+	ray r = ray(cu_r.origin, cu_r.direction);
 
 	if (hit.hit_idx == -1) {
 		//if (s.pixelId == DBG_IDX)	printf("NO_HIT\n");
 
 		// no intersection with spheres, return sky color
-		vec3 unit_direction = unit_vector(r.direction());
-		float t = 0.5*(unit_direction.y() + 1.0);
-		vec3 sky_clr = 1.0* ((1 - t)*vec3(1.0, 1.0, 1.0) + t*vec3(0.5, 0.7, 1.0));
-		//vec3 sky_clr(0, 0, 0);
+		float3 unit_direction = normalize(r.direction());
+		float t = 0.5*(unit_direction.y + 1.0);
+		float3 sky_clr = 1.0* ((1 - t)*make_float3(1.0, 1.0, 1.0) + t*make_float3(0.5, 0.7, 1.0));
+		//float3 sky_clr(0, 0, 0);
 		s.color += s.not_absorbed*sky_clr;
 		return false;
 	}
@@ -160,13 +160,13 @@ bool renderer::color(int ray_idx) {
 	rec.mat_ptr = sphr->mat_ptr;
 
 	scatter_record srec;
-	const vec3& emitted = rec.mat_ptr->emitted(r, rec, rec.p);
+	const float3& emitted = rec.mat_ptr->emitted(r, rec, rec.p);
 	s.color += s.not_absorbed*emitted;
 	//if (s.pixelId==DBG_IDX && s.color.squared_length() > 10) printf("white acne at %d\n", s.pixelId);
 	//if (s.pixelId == DBG_IDX) printf("emitted=(%.2f,%.2f,%.2f), not_absorbed=%.6f\n", emitted[0], emitted[1], emitted[2], s.not_absorbed.squared_length());
 	if ((++s.depth) <= max_depth && rec.mat_ptr->scatter(r, rec, light_shape, srec)) {
-		cu_r.origin = srec.scattered.origin().to_float3();
-		cu_r.direction = srec.scattered.direction().to_float3();
+		cu_r.origin = srec.scattered.origin();
+		cu_r.direction = srec.scattered.direction();
 		s.not_absorbed *= srec.attenuation;
 		return true;
 	}
@@ -265,8 +265,8 @@ void renderer::compact_rays()
 			const unsigned int x = pixelId % nx;
 			const unsigned int y = ny - 1 - (pixelId / nx);
 			generate_ray(i, x, y);
-			samples[i].color = vec3(0, 0, 0);
-			samples[i].not_absorbed = vec3(1, 1, 1);
+			samples[i].color = make_float3(0, 0, 0);
+			samples[i].not_absorbed = make_float3(1, 1, 1);
 		}
 	}
 	std::sort(pixel_idx, pixel_idx + numpixels(), pixel_compare(pixels));

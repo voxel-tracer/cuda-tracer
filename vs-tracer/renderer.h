@@ -36,9 +36,9 @@ public:
 	unsigned int numpixels() const { return nx*ny; }
 	unsigned int numrays() const { return num_rays; }
 	unsigned int get_pixelId(int x, int y) const { return (ny - y - 1)*nx + x; }
-	vec3 get_pixel_color(int x, int y) const {
+	float3 get_pixel_color(int x, int y) const {
 		const unsigned int pixelId = get_pixelId(x, y);
-		if (pixels[pixelId].done == 0) return vec3(0, 0, 0);
+		if (pixels[pixelId].done == 0) return make_float3(0, 0, 0);
 		return h_colors[pixelId] / float(pixels[pixelId].done);
 	}
 
@@ -68,7 +68,7 @@ public:
 	unsigned int scene_size;
 
 	pixel* pixels;
-	vec3* h_colors;
+	float3* h_colors;
 
 	clock_t kernel = 0;
 	clock_t generate = 0;

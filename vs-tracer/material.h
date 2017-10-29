@@ -19,24 +19,24 @@ struct scatter_record
 {
 	ray scattered;
 	bool is_specular;
-	vec3 attenuation;
+	float3 attenuation;
 	pdf *pdf_ptr;
 };
 
 struct material 
 {
 	materialType type;
-	vec3 albedo;
-	vec3 _emitted;
+	float3 albedo;
+	float3 _emitted;
 	float param;
 	bool scatter(const ray& ray_in, const hit_record& rec, const hitable* light_shape, scatter_record& srec) const;
 	float scattering_pdf(const ray& r_in, const hit_record& rec, const ray& scattered) const;
-	vec3 emitted(const ray& r_in, const hit_record& rec, const vec3 &p) const;
+	float3 emitted(const ray& r_in, const hit_record& rec, const float3 &p) const;
 };
 
-material* make_lambertian(const vec3& a);
-material* make_metal(const vec3& albedo, float fuzz);
+material* make_lambertian(const float3& a);
+material* make_metal(const float3& albedo, float fuzz);
 material* make_dielectric(float ref_idx);
-material* make_diffuse_light(const vec3& e);
+material* make_diffuse_light(const float3& e);
 
 #endif /* MATERIAL_H_ */

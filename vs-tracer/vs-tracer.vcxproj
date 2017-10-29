@@ -31,7 +31,6 @@
     <ClInclude Include="sphere.h" />
     <ClInclude Include="stb_image_write.h" />
     <ClInclude Include="utils.h" />
-    <ClInclude Include="vec3.h" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="raytracer.cu" />

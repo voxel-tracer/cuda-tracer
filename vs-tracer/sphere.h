@@ -7,9 +7,9 @@
 
 class sphere: public hitable {
 	public:
-		sphere(vec3 cen, float r, const material *mat) { center = cen; radius = r; mat_ptr = mat; }
+		sphere(float3 cen, float r, const material *mat) { center = cen; radius = r; mat_ptr = mat; }
 		virtual bool hit(const ray& r, float t_min, float t_max, hit_record& rec) const {
-			vec3 oc = r.origin() - center;
+			float3 oc = r.origin() - center;
 			float a = dot(r.direction(), r.direction());
 			float b = dot(oc, r.direction());
 			float c = dot(oc, oc) - radius*radius;
@@ -35,24 +35,24 @@ class sphere: public hitable {
 			}
 			return false;
 		}
-		virtual float pdf_value(const vec3& o, const vec3& v) const {
+		virtual float pdf_value(const float3& o, const float3& v) const {
 			hit_record rec;
 			if (this->hit(ray(o, v), 0.001, FLT_MAX, rec)) {
-				float cos_theta_max = sqrtf(1 - radius*radius / (center - o).squared_length());
+				float cos_theta_max = sqrtf(1 - radius*radius / squared_length(center - o));
 				float solid_angle = 2 * M_PI*(1 - cos_theta_max);
 				return 1 / solid_angle;
 			}
 			return 0;
 		}
-		virtual vec3 random(const vec3& o) const {
-			vec3 direction = center - o;
-			float distance_squared = direction.squared_length();
+		virtual float3 random(const float3& o) const {
+			float3 direction = center - o;
+			float distance_squared = squared_length(direction);
 			onb uvw;
 			uvw.build_from_w(direction);
 			return uvw.local(random_to_sphere(radius, distance_squared));
 
 		}
-		vec3 center;
+		float3 center;
 		float radius;
 		const material *mat_ptr;
 };

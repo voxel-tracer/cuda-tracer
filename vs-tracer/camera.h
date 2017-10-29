@@ -6,7 +6,7 @@
 
 class camera {
 public:
-	camera(vec3 lookfrom, vec3 _lookat, vec3 _vup, float vfov, float aspect, float aperture, float _focus_dist) { // vfov is top to bottom in degrees
+	camera(float3 lookfrom, float3 _lookat, float3 _vup, float vfov, float aspect, float aperture, float _focus_dist) { // vfov is top to bottom in degrees
 		lens_radius = aperture / 2;
 		float theta = vfov*M_PI/180;
 		half_height = tan(theta/2);
@@ -14,14 +14,14 @@ public:
 		lookat = _lookat;
 		focus_dist = _focus_dist;
 		vup = _vup;
-		radial_distance = (lookfrom - lookat).length();
+		radial_distance = length(lookfrom - lookat);
 		init(lookfrom);
 	}
 
-	void init(vec3 lookfrom) {
+	void init(float3 lookfrom) {
 		origin = lookfrom;
-		w = unit_vector(lookfrom - lookat);
-		u = unit_vector(cross(vup, w));
+		w = normalize(lookfrom - lookat);
+		u = normalize(cross(vup, w));
 		v = cross(w, u);
 		lower_left_corner = origin - half_width*focus_dist*u - half_height*focus_dist*v - focus_dist*w;
 		horizontal = 2*half_width*focus_dist*u;
@@ -29,7 +29,7 @@ public:
 	}
 
 	void look_from(float theta, float phi) {
-		init(vec3(
+		init(make_float3(
 			radial_distance*sinf(theta)*sinf(phi),
 			radial_distance*cosf(theta),
 			radial_distance*sinf(theta)*cosf(phi)) + lookat
@@ -37,31 +37,31 @@ public:
 	}
 
 	void get_ray(float s, float t, ray& r) const {
-		vec3 rd = lens_radius*random_in_unit_disk();
-		vec3 offset = u*rd.x() + v*rd.y();
+		float3 rd = lens_radius*random_in_unit_disk();
+		float3 offset = u*rd.x + v*rd.y;
 
 		r.A = origin + offset;
 		r.B = lower_left_corner + s*horizontal + t*vertical - origin - offset;
 	}
 
 	void get_ray(float s, float t, cu_ray& r) const {
-		vec3 rd = lens_radius*random_in_unit_disk();
-		vec3 offset = u*rd.x() + v*rd.y();
+		float3 rd = lens_radius*random_in_unit_disk();
+		float3 offset = u*rd.x + v*rd.y;
 
-		r.origin = (origin + offset).to_float3();
-		r.direction = (lower_left_corner + s*horizontal + t*vertical - origin - offset).to_float3();
+		r.origin = origin + offset;
+		r.direction = lower_left_corner + s*horizontal + t*vertical - origin - offset;
 	}
 
-	vec3 lookat;
-	vec3 origin;
-	vec3 vup;
+	float3 lookat;
+	float3 origin;
+	float3 vup;
 	float half_width;
 	float half_height;
 	float focus_dist;
-	vec3 lower_left_corner;
-	vec3 horizontal;
-	vec3 vertical;
-	vec3 u, v, w;
+	float3 lower_left_corner;
+	float3 horizontal;
+	float3 vertical;
+	float3 u, v, w;
 	float lens_radius;
 private:
 	float radial_distance;
