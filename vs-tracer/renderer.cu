@@ -92,9 +92,9 @@ void renderer::prepare_kernel()
 		pixel_idx[i] = i;
 	}
 
-	clock_t start = clock();
+	//clock_t start = clock();
 	generate_rays(h_rays);
-	generate += clock() - start;
+	//generate += clock() - start;
 
 	num_rays = num_pixels;
 
@@ -118,9 +118,9 @@ void renderer::update_camera()
 		pixel_idx[i] = i;
 	}
 
-	clock_t start = clock();
+	//clock_t start = clock();
 	generate_rays(h_rays);
-	generate += clock() - start;
+	//generate += clock() - start;
 	num_rays = num_pixels;
 }
 
@@ -243,7 +243,7 @@ hit_scene(const cu_ray* rays, const unsigned int num_rays, const cu_sphere* scen
 void renderer::run_kernel()
 {
 	cudaProfilerStart();
-	clock_t start = clock();
+	//clock_t start = clock();
 
 	// copying rays to device
 	err(cudaMemcpy(d_rays, h_rays, num_rays * sizeof(cu_ray), cudaMemcpyHostToDevice), "copy rays from host to device");
@@ -257,61 +257,39 @@ void renderer::run_kernel()
 	// Copy the results to host
 	err(cudaMemcpy(h_hits, d_hits, num_rays * sizeof(cu_hit), cudaMemcpyDeviceToHost), "copy results from device to host");
 
-	kernel += clock() - start;
+	//kernel += clock() - start;
 	cudaProfilerStop();
 }
 
-
 void renderer::compact_rays()
 {
+	unsigned int sampled = 0;
 	// first step only generate scattered rays and compact them
-	clock_t start = clock();
-	unsigned int ray_idx = 0;
-	for (unsigned int i = 0; i < num_rays; ++i)
+	for (unsigned int i = 0; i < numpixels(); ++i)
 	{
-		const unsigned int pixelId = samples[i].pixelId;
-		if (color(i) /*&& samples[i].not_absorbed.squared_length() > min_attenuation*/)
-		{
-			// compact ray
-			h_rays[ray_idx] = h_rays[i];
-			samples[ray_idx] = samples[i];
-			++ray_idx;
-		}
-		else
-		{
-			// ray is no longer active, cumulate its color
+		unsigned int pixelId = samples[i].pixelId;
+		//clock_t start = clock();
+		bool active = color(i);
+		//compact += clock() - start;
+		if (!active) { // is ray no longer active ?
+			// cumulate its color
 			h_colors[pixelId] += samples[i].color;
 			++(pixels[pixelId].done);
-			if (pixelId == DBG_IDX) printf("sample done\n");
+			//if (pixelId == DBG_IDX) printf("sample done\n");
+
+			// generate new ray
+			pixelId = pixel_idx[(sampled++) % numpixels()];
+			pixels[pixelId].samples++;
+			// then, generate a new sample
+			const unsigned int x = pixelId % nx;
+			const unsigned int y = ny - 1 - (pixelId / nx);
+			generate_ray(i, x, y);
+			samples[i].color = vec3(0, 0, 0);
+			samples[i].not_absorbed = vec3(1, 1, 1);
 		}
 	}
-	compact += clock() - start;
-	// for each ray that's no longer active, sample a pixel that's not fully sampled yet
-	start = clock();
-	std::sort(pixel_idx, pixel_idx+numpixels(), pixel_compare(pixels));
-	unsigned int sampled = 0;
-	do
-	{
-		sampled = 0;
-		for (unsigned int i = 0; i < numpixels() && ray_idx < numpixels(); ++i)
-		{
-			const unsigned int pixelId = pixel_idx[i];
-			if (pixels[pixelId].samples < ns)
-			{
-				pixels[pixelId].samples++;
-				// then, generate a new sample
-				const unsigned int x = pixelId % nx;
-				const unsigned int y = ny - 1 - (pixelId / nx);
-				generate_ray(ray_idx, x, y);
-				samples[ray_idx].color = vec3(0, 0, 0);
-				samples[ray_idx].not_absorbed = vec3(1, 1, 1);
-				++ray_idx;
-				++sampled;
-			}
-		}
-	} while (ray_idx < numpixels() && sampled > 0);
-	generate += clock() - start;
-	num_rays = ray_idx;
+	std::sort(pixel_idx, pixel_idx + numpixels(), pixel_compare(pixels));
+	num_rays = (pixels[pixel_idx[0]].samples <= ns) ? numpixels() : 0;
 }
 
 void renderer::destroy() {

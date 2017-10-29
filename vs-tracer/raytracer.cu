@@ -202,7 +202,7 @@ int main(int argc, char** argv)
 	const unsigned int scene_size = 500;
 	const int nx = 600;
 	const int ny = 300;
-	const int ns = 1000;
+	const int ns = 100;
 	hitable_list *world;
 	camera *cam;
 	hitable *light_shape;
