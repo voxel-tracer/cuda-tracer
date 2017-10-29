@@ -17,7 +17,7 @@ enum materialType
 
 struct scatter_record
 {
-	ray specular_ray;
+	ray scattered;
 	bool is_specular;
 	vec3 attenuation;
 	pdf *pdf_ptr;
@@ -29,7 +29,7 @@ struct material
 	vec3 albedo;
 	vec3 _emitted;
 	float param;
-	bool scatter(const ray& ray_in, const hit_record& rec, scatter_record& srec) const;
+	bool scatter(const ray& ray_in, const hit_record& rec, const hitable* light_shape, scatter_record& srec) const;
 	float scattering_pdf(const ray& r_in, const hit_record& rec, const ray& scattered) const;
 	vec3 emitted(const ray& r_in, const hit_record& rec, const vec3 &p) const;
 };

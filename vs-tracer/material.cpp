@@ -35,18 +35,23 @@ material* make_diffuse_light(const vec3& e)
 	return mat;
 }
 
-inline bool scatter_lambertian(const material* mat, const ray& ray_in, const hit_record& hrec, scatter_record& srec)
+inline bool scatter_lambertian(const material* mat, const ray& ray_in, const hit_record& hrec, const hitable* light_shape, scatter_record& srec)
 {
 	srec.is_specular = false;
-	srec.attenuation = mat->albedo;
+	hitable_pdf plight(light_shape, hrec.p);
 	srec.pdf_ptr = new cosine_density(hrec.normal);
-	return true;
+	mixture_pdf p(&plight, srec.pdf_ptr);
+	srec.scattered = ray(hrec.p, p.generate());
+	float pdf_val = p.value(srec.scattered.direction());
+	float scattering_pdf = mat->scattering_pdf(ray_in, hrec, srec.scattered);
+	srec.attenuation = mat->albedo*scattering_pdf / pdf_val;
+	return pdf_val > 0;
 }
 
 inline bool scatter_metal(const material* mat, const ray& r_in, const hit_record& hrec, scatter_record& srec)
 {
 	vec3 reflected = reflect(unit_vector(r_in.direction()), hrec.normal);
-	srec.specular_ray = ray(hrec.p, reflected + mat->param*random_in_unit_sphere());
+	srec.scattered = ray(hrec.p, reflected + mat->param*random_in_unit_sphere());
 	srec.attenuation = mat->albedo;
 	srec.is_specular = true;
 	srec.pdf_ptr = NULL;
@@ -80,26 +85,26 @@ inline bool scatter_dielectric(const material* mat, const ray& r_in, const hit_r
 		reflect_probe = 1.0;
 	}
 	if (drand48() < reflect_probe) {
-		srec.specular_ray = ray(hrec.p, reflected);
+		srec.scattered = ray(hrec.p, reflected);
 	}
 	else {
-		srec.specular_ray = ray(hrec.p, refracted);
+		srec.scattered = ray(hrec.p, refracted);
 	}
 	return true;
 }
 
-bool material::scatter(const ray& ray_in, const hit_record& rec, scatter_record& srec) const
+bool material::scatter(const ray& ray_in, const hit_record& rec, const hitable* light_shape, scatter_record& srec) const
 {
 	switch (type)
 	{
 	case LAMBERTIAN:
-		return scatter_lambertian(this, ray_in, rec, srec);
+		return scatter_lambertian(this, ray_in, rec, light_shape, srec);
 	case METAL:
 		return scatter_metal(this, ray_in, rec, srec);
 	case DIELECTRIC:
 		return scatter_dielectric(this, ray_in, rec, srec);
 	default:
-		// should never happen
+		// DIFFUSE_LIGHT is an example of a material that doesn't scatter light
 		return false;
 	}
 }

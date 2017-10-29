@@ -164,30 +164,11 @@ bool renderer::color(int ray_idx) {
 	s.color += s.not_absorbed*emitted;
 	//if (s.pixelId==DBG_IDX && s.color.squared_length() > 10) printf("white acne at %d\n", s.pixelId);
 	//if (s.pixelId == DBG_IDX) printf("emitted=(%.2f,%.2f,%.2f), not_absorbed=%.6f\n", emitted[0], emitted[1], emitted[2], s.not_absorbed.squared_length());
-	if ((++s.depth) <= max_depth && rec.mat_ptr->scatter(r, rec, srec)) {
-		if (srec.is_specular) {
-			r = srec.specular_ray;
-			cu_r.origin = r.origin().to_float3();
-			cu_r.direction = r.direction().to_float3();
-			s.not_absorbed *= srec.attenuation;
-			return true;
-		}
-		else {
-			//light_shape->sphere_dbg = s.pixelId == DBG_IDX;
-			hitable_pdf plight(light_shape, rec.p);
-			mixture_pdf p(&plight, srec.pdf_ptr);
-			//const pdf &p = *(srec.pdf_ptr);
-			ray scattered = ray(rec.p, p.generate());
-			float pdf_val = p.value(scattered.direction());
-			if (pdf_val > 0) {
-				cu_r.origin = scattered.origin().to_float3();
-				cu_r.direction = scattered.direction().to_float3();
-				float scattering_pdf = rec.mat_ptr->scattering_pdf(r, rec, scattered);
-				s.not_absorbed *= srec.attenuation* scattering_pdf / pdf_val;
-				r = scattered;
-				return true;
-			}
-		}
+	if ((++s.depth) <= max_depth && rec.mat_ptr->scatter(r, rec, light_shape, srec)) {
+		cu_r.origin = srec.scattered.origin().to_float3();
+		cu_r.direction = srec.scattered.direction().to_float3();
+		s.not_absorbed *= srec.attenuation;
+		return true;
 	}
 
 	return false;
