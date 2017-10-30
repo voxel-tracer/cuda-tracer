@@ -1,17 +1,8 @@
 #pragma once
 
+#include <limits.h>
 #include "onb.h"
-#include "hitable.h"
-
-inline float3 random_to_sphere(float radius, float distance_squared) {
-	float r1 = drand48();
-	float r2 = drand48();
-	float z = 1 + r2*(sqrt(1 - radius*radius / distance_squared) - 1);
-	float phi = 2 * M_PI*r1;
-	float x = cos(phi)*sqrt(1 - z*z);
-	float y = sin(phi)*sqrt(1 - z*z);
-	return make_float3(x, y, z);
-}
+#include "sphere.h"
 
 class pdf {
 public:
@@ -37,7 +28,7 @@ public:
 
 class hitable_pdf :public pdf {
 public:
-	hitable_pdf(const hitable *p, const float3& origin) : ptr(p), o(origin) {}
+	hitable_pdf(const sphere *p, const float3& origin) : ptr(p), o(origin) {}
 	virtual float value(const float3& direction) const {
 		return ptr->pdf_value(o, direction);
 	}
@@ -46,7 +37,7 @@ public:
 	}
 
 	float3 o;
-	const hitable *ptr;
+	const sphere *ptr;
 };
 
 class mixture_pdf :public pdf {

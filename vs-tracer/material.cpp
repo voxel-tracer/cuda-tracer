@@ -1,5 +1,6 @@
 #include "material.h"
 #include "onb.h"
+#include "utils.h"
 
 
 material* make_lambertian(const float3& a)
@@ -35,7 +36,7 @@ material* make_diffuse_light(const float3& e)
 	return mat;
 }
 
-inline bool scatter_lambertian(const material* mat, const ray& ray_in, const hit_record& hrec, const hitable* light_shape, scatter_record& srec)
+inline bool scatter_lambertian(const material* mat, const ray& ray_in, const hit_record& hrec, const sphere* light_shape, scatter_record& srec)
 {
 	srec.is_specular = false;
 	hitable_pdf plight(light_shape, hrec.p);
@@ -93,7 +94,7 @@ inline bool scatter_dielectric(const material* mat, const ray& r_in, const hit_r
 	return true;
 }
 
-bool material::scatter(const ray& ray_in, const hit_record& rec, const hitable* light_shape, scatter_record& srec) const
+bool material::scatter(const ray& ray_in, const hit_record& rec, const sphere* light_shape, scatter_record& srec) const
 {
 	switch (type)
 	{

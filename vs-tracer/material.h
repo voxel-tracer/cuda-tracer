@@ -4,7 +4,7 @@
 #include <vector_functions.hpp>
 #include "ray.h"
 #include "pdf.h"
-#include "hitable.h"
+#include "sphere.h"
 #include "utils.h"
 
 enum materialType 
@@ -29,7 +29,7 @@ struct material
 	float3 albedo;
 	float3 _emitted;
 	float param;
-	bool scatter(const ray& ray_in, const hit_record& rec, const hitable* light_shape, scatter_record& srec) const;
+	bool scatter(const ray& ray_in, const hit_record& rec, const sphere* light_shape, scatter_record& srec) const;
 	float scattering_pdf(const ray& r_in, const hit_record& rec, const ray& scattered) const;
 	float3 emitted(const ray& r_in, const hit_record& rec, const float3 &p) const;
 };

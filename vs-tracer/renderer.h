@@ -4,7 +4,6 @@
 
 #include "camera.h"
 #include "hitable_list.h"
-#include "sphere.h"
 
 struct cu_hit {
 	int hit_idx;
@@ -22,7 +21,7 @@ struct pixel {
 
 class renderer {
 public:
-	renderer(camera* _cam, hitable_list* w, hitable *ls, unsigned int _nx, unsigned int _ny, unsigned int _ns, unsigned int _max_depth, float _min_attenuation) { 
+	renderer(camera* _cam, hitable_list* w, sphere *ls, unsigned int _nx, unsigned int _ny, unsigned int _ns, unsigned int _max_depth, float _min_attenuation) { 
 		cam = _cam;
 		world = w;
 		nx = _nx; 
@@ -64,7 +63,7 @@ public:
 	ray* d_rays;
 	cu_hit* h_hits;
 	cu_hit* d_hits;
-	cu_sphere* d_scene;
+	sphere* d_scene;
 	unsigned int scene_size;
 
 	pixel* pixels;
@@ -76,7 +75,7 @@ public:
 
 	unsigned int num_rays;
 private:
-	hitable *light_shape;
+	sphere *light_shape;
 	int* pixel_idx;
 	sample* samples;
 	inline void generate_ray(int ray_idx, int x, int y);

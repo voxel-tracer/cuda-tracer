@@ -8,6 +8,7 @@
 #include "sphere.h"
 #include "device_launch_parameters.h"
 #include "pdf.h"
+#include "material.h"
 
 #define DBG_IDX	-1 //42091
 
@@ -20,11 +21,11 @@ void err(cudaError_t err, char *msg)
 	}
 }
 
-cu_sphere*
+sphere*
 init_cu_scene(const hitable_list* world)
 {
 	const unsigned int size = world->list_size;
-	cu_sphere* scene = (cu_sphere*)malloc(size * sizeof(cu_sphere));
+	sphere* scene = (sphere*)malloc(size * sizeof(sphere));
 	for (int i = 0; i < size; i++)
 	{
 		const sphere *s = (sphere*)world->list[i];
@@ -59,7 +60,7 @@ inline void renderer::generate_ray(int ray_idx, int x, int y)
 void renderer::prepare_kernel()
 {
 	const unsigned int num_pixels = nx*ny;
-	cu_sphere *h_scene = init_cu_scene(world);
+	sphere *h_scene = init_cu_scene(world);
 	scene_size = 500;
 	
 	pixels = new pixel[num_pixels];
@@ -71,7 +72,7 @@ void renderer::prepare_kernel()
 	
 	// allocate device memory for input
     d_scene = NULL;
-	err(cudaMalloc((void **)&d_scene, scene_size * sizeof(cu_sphere)), "allocate device d_scene");
+	err(cudaMalloc((void **)&d_scene, scene_size * sizeof(sphere)), "allocate device d_scene");
 
     d_rays = NULL;
 	err(cudaMalloc((void **)&d_rays, num_pixels * sizeof(ray)), "allocate device d_rays");
@@ -80,7 +81,7 @@ void renderer::prepare_kernel()
 	err(cudaMalloc((void **)&d_hits, num_pixels * sizeof(cu_hit)), "allocate device d_hits");
 
     // Copy the host input in host memory to the device input in device memory
-	err(cudaMemcpy(d_scene, h_scene, world->list_size * sizeof(cu_sphere), cudaMemcpyHostToDevice), "copy scene from host to device");
+	err(cudaMemcpy(d_scene, h_scene, world->list_size * sizeof(sphere), cudaMemcpyHostToDevice), "copy scene from host to device");
 
 	// set temporary variables
 	for (int i = 0; i < num_pixels; i++)
@@ -175,7 +176,7 @@ bool renderer::color(int ray_idx) {
 }
 
 __global__ void
-hit_scene(const ray* rays, const unsigned int num_rays, const cu_sphere* scene, const unsigned int scene_size, float t_min, float t_max, cu_hit* hits)
+hit_scene(const ray* rays, const unsigned int num_rays, const sphere* scene, const unsigned int scene_size, float t_min, float t_max, cu_hit* hits)
 {
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
 	if (i >= num_rays)
@@ -190,7 +191,7 @@ hit_scene(const ray* rays, const unsigned int num_rays, const cu_sphere* scene, 
 
 	for (int s = 0; s < scene_size; s++)
 	{
-		const cu_sphere sphere = scene[s];
+		const sphere sphere = scene[s];
 		const float3 sc = sphere.center;
 		const float sr = sphere.radius;
 

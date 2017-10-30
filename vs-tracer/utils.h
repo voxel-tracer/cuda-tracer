@@ -17,6 +17,7 @@ inline void fast_srand(int seed);
 inline float drand48(void);
 float3 random_cosine_direction();
 float3 random_to_sphere();
+float3 random_to_sphere(float radius, float distance_squared);
 bool refract(const float3& v, const float3& n, float ni_over_nt, float3& refracted);
 float schlick(float cosine, float ref_idx);
 float3 random_in_unit_disk();
