@@ -39,11 +39,13 @@ material* make_diffuse_light(const float3& e)
 inline bool scatter_lambertian(const material* mat, const ray& ray_in, const hit_record& hrec, const sphere* light_shape, scatter_record& srec)
 {
 	srec.is_specular = false;
-	hitable_pdf plight(light_shape, hrec.p);
-	srec.pdf_ptr = new cosine_density(hrec.normal);
-	mixture_pdf p(&plight, srec.pdf_ptr);
-	srec.scattered = ray(hrec.p, p.generate());
-	float pdf_val = p.value(srec.scattered.direction);
+	pdf *p = new cosine_density(hrec.normal);
+	if (light_shape != NULL) {
+		hitable_pdf plight(light_shape, hrec.p);
+		p = new mixture_pdf(&plight, p);
+	}
+	srec.scattered = ray(hrec.p, p->generate());
+	float pdf_val = p->value(srec.scattered.direction);
 	float scattering_pdf = mat->scattering_pdf(ray_in, hrec, srec.scattered);
 	srec.attenuation = mat->albedo*scattering_pdf / pdf_val;
 	return pdf_val > 0;
@@ -55,7 +57,6 @@ inline bool scatter_metal(const material* mat, const ray& r_in, const hit_record
 	srec.scattered = ray(hrec.p, reflected + mat->param*random_to_sphere());
 	srec.attenuation = mat->albedo;
 	srec.is_specular = true;
-	srec.pdf_ptr = NULL;
 	return true;
 }
 

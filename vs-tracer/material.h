@@ -20,7 +20,7 @@ struct scatter_record
 	ray scattered;
 	bool is_specular;
 	float3 attenuation;
-	pdf *pdf_ptr;
+	//pdf *pdf_ptr;
 };
 
 struct material 
