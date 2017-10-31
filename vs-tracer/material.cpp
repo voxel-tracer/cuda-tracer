@@ -39,10 +39,10 @@ material* make_diffuse_light(const float3& e)
 inline bool scatter_lambertian(const material* mat, const ray& ray_in, const hit_record& hrec, const sphere* light_shape, scatter_record& srec)
 {
 	srec.is_specular = false;
-	pdf *p = new cosine_density(hrec.normal);
+	pdf *p = make_cosine_pdf(hrec.normal);
 	if (light_shape != NULL) {
-		hitable_pdf plight(light_shape, hrec.p);
-		p = new mixture_pdf(&plight, p);
+		pdf  *plight = make_hitable_pdf(light_shape, hrec.p);
+		p = make_mixture_pdf(plight, p);
 	}
 	srec.scattered = ray(hrec.p, p->generate());
 	float pdf_val = p->value(srec.scattered.direction);

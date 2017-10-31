@@ -39,4 +39,6 @@ material* make_metal(const float3& albedo, float fuzz);
 material* make_dielectric(float ref_idx);
 material* make_diffuse_light(const float3& e);
 
+bool scatter_lambertian(const material* mat, const ray& ray_in, const hit_record& hrec, const sphere* light_shape, scatter_record& srec);
+
 #endif /* MATERIAL_H_ */

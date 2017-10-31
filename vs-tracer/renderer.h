@@ -45,6 +45,7 @@ public:
 	void update_camera();
 
 	bool color(int ray_idx);
+	bool simple_color(int ray_idx);
 	ray* generate_rays(ray* rays);
 	void run_kernel();
 	void compact_rays();

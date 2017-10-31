@@ -173,6 +173,37 @@ bool renderer::color(int ray_idx) {
 	return false;
 }
 
+bool renderer::simple_color(int ray_idx) {
+	ray& r = h_rays[ray_idx];
+	const cu_hit& hit = h_hits[ray_idx];
+	sample& s = samples[ray_idx];
+
+	if (hit.hit_idx == -1) {
+		// no intersection with spheres, return sky color
+		float3 unit_direction = normalize(r.direction);
+		float t = 0.5*(unit_direction.y + 1.0);
+		float3 sky_clr = 1.0* ((1 - t)*make_float3(1.0, 1.0, 1.0) + t*make_float3(0.5, 0.7, 1.0));
+		s.color += s.not_absorbed*sky_clr;
+		return false;
+	}
+
+	hit_record rec;
+	sphere *sphr = (sphere*)(world->list[hit.hit_idx]);
+	rec.t = hit.hit_t;
+	rec.p = r.point_at_parameter(hit.hit_t);
+	rec.normal = (rec.p - sphr->center) / sphr->radius;
+	rec.mat_ptr = sphr->mat_ptr;
+
+	scatter_record srec;
+	if ((++s.depth) <= max_depth && scatter_lambertian(rec.mat_ptr, r, rec, light_shape, srec)) {
+		r = srec.scattered;
+		s.not_absorbed *= srec.attenuation;
+		return true;
+	}
+
+	return false;
+}
+
 __global__ void
 hit_scene(const ray* rays, const unsigned int num_rays, const sphere* scene, const unsigned int scene_size, float t_min, float t_max, cu_hit* hits)
 {
@@ -248,10 +279,7 @@ void renderer::compact_rays()
 	for (unsigned int i = 0; i < numpixels(); ++i)
 	{
 		unsigned int pixelId = samples[i].pixelId;
-		//clock_t start = clock();
-		bool active = color(i);
-		//compact += clock() - start;
-		if (!active) { // is ray no longer active ?
+		if (!simple_color(i)) { // is ray no longer active ?
 			// cumulate its color
 			h_colors[pixelId] += samples[i].color;
 			++(pixels[pixelId].done);

@@ -4,52 +4,31 @@
 #include "onb.h"
 #include "sphere.h"
 
-class pdf {
-public:
-	virtual float value(const float3& direction) const = 0;
-	virtual	float3 generate() const = 0;
+enum pdf_type {
+	COSINE,
+	HITABLE,
+	MIXTURE
 };
 
-class cosine_density : public pdf {
-public:
-	cosine_density(const float3& w) { uvw.build_from_w(w); }
-	virtual float value(const float3& direction) const {
-		float cosine = dot(normalize(direction), uvw.w());
-		if (cosine > 0)
-			return cosine / M_PI;
-		return 0;
-	}
-	virtual float3 generate() const {
-		return uvw.local(random_cosine_direction());
-	}
+struct pdf {
+	pdf(const float3& w): type(COSINE), uvw(w), o() {} // cosine density pdf
+	pdf(const sphere *p, const float3& origin): type(HITABLE), ptr(p), o(origin) {} // hitable pdf
+	pdf(pdf *p0, pdf *p1) : type(MIXTURE), o() { p[0] = p0; p[1] = p1; } // mixture pdf
 
-	onb uvw;
-};
+	float value(const float3& direction) const;
+	float3 generate() const;
 
-class hitable_pdf :public pdf {
-public:
-	hitable_pdf(const sphere *p, const float3& origin) : ptr(p), o(origin) {}
-	virtual float value(const float3& direction) const {
-		return ptr->pdf_value(o, direction);
-	}
-	virtual float3 generate() const {
-		return ptr->random(o);
-	}
+	const pdf_type type;
 
-	float3 o;
+	// COSINE
+	const onb uvw;
+	// HITABLE
+	const float3 o;
 	const sphere *ptr;
-};
-
-class mixture_pdf :public pdf {
-public:
-	mixture_pdf(pdf *p0, pdf *p1) { p[0] = p0; p[1] = p1; }
-	virtual float value(const float3& direction) const {
-		return 0.5*p[0]->value(direction) + 0.5*p[1]->value(direction);
-	}
-	virtual float3 generate() const {
-		if (drand48() < 0.5)
-			return p[0]->generate();
-		return p[1]->generate();
-	}
+	// MIXTURE
 	pdf *p[2];
 };
+
+pdf* make_cosine_pdf(const float3& w);
+pdf* make_hitable_pdf(const sphere *p, const float3& origin);
+pdf* make_mixture_pdf(pdf *p0, pdf *p1);

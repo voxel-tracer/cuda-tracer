@@ -4,6 +4,7 @@
 
 struct onb {
 	onb() {}
+	onb(const float3& w) { build_from_w(w); }
 	inline float3 operator[](int i) const { return axis[i]; }
 	float3 u() const { return axis[0]; }
 	float3 v() const { return axis[1]; }
