@@ -8,7 +8,7 @@ class camera {
 public:
 	camera(float3 lookfrom, float3 _lookat, float3 _vup, float vfov, float aspect, float aperture, float _focus_dist) { // vfov is top to bottom in degrees
 		lens_radius = aperture / 2;
-		float theta = vfov*M_PI/180;
+		float theta = vfov*M_PI / 180;
 		half_height = tan(theta/2);
 		half_width = aspect * half_height;
 		lookat = _lookat;

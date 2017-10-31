@@ -8,11 +8,6 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
-// For the CUDA runtime routines (prefixed with "cuda_")
-//#include <cuda_runtime.h>
-//#include <cuda_profiler_api.h>
-//#include <helper_cuda.h>
-
 #include "sphere.h"
 #include "hitable_list.h"
 #include "renderer.h"
@@ -203,7 +198,6 @@ int main(int argc, char** argv)
 	bool write_image = true;
 	bool show_window = false;
 
-	const unsigned int scene_size = 500;
 	const int nx = 600;
 	const int ny = 300;
 	const int ns = 100;

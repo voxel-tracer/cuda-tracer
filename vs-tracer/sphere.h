@@ -6,7 +6,7 @@
 #include "ray.h"
 #include "onb.h"
 
-class material;
+struct material;
 
 struct hit_record {
 	float t;

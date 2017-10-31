@@ -136,10 +136,9 @@ ray* renderer::generate_rays(ray* rays)
 }
 
 bool renderer::color(int ray_idx) {
-	ray& cu_r = h_rays[ray_idx];
+	ray& r = h_rays[ray_idx];
 	const cu_hit& hit = h_hits[ray_idx];
 	sample& s = samples[ray_idx];
-	ray r = ray(cu_r);
 
 	if (hit.hit_idx == -1) {
 		//if (s.pixelId == DBG_IDX)	printf("NO_HIT\n");
@@ -166,8 +165,7 @@ bool renderer::color(int ray_idx) {
 	//if (s.pixelId==DBG_IDX && s.color.squared_length() > 10) printf("white acne at %d\n", s.pixelId);
 	//if (s.pixelId == DBG_IDX) printf("emitted=(%.2f,%.2f,%.2f), not_absorbed=%.6f\n", emitted[0], emitted[1], emitted[2], s.not_absorbed.squared_length());
 	if ((++s.depth) <= max_depth && rec.mat_ptr->scatter(r, rec, light_shape, srec)) {
-		cu_r.origin = srec.scattered.origin;
-		cu_r.direction = srec.scattered.direction;
+		r = srec.scattered;
 		s.not_absorbed *= srec.attenuation;
 		return true;
 	}
@@ -202,14 +200,14 @@ hit_scene(const ray* rays, const unsigned int num_rays, const sphere* scene, con
 		float discriminant = b*b - a*c;
 		if (discriminant > 0.01) {
 			float t = (-b - sqrtf(discriminant)) / a;
-			if (r->pixelId == DBG_IDX && s == 4) printf("hit_scene: a %.6f, b %.6f, c %.6f, d %.6f, t %.6f\n", a, b, c, discriminant, t);
+			//if (r->pixelId == DBG_IDX && s == 4) printf("hit_scene: a %.6f, b %.6f, c %.6f, d %.6f, t %.6f\n", a, b, c, discriminant, t);
 			if (t < closest_hit && t > t_min) {
 				closest_hit = t;
 				hit_idx = s;
 				continue;
 			}
 			t = (-b + sqrtf(discriminant)) / a;
-			if (r->pixelId == DBG_IDX && s == 4) printf("hit_scene: a %.6f, b %.6f, c %.6f, d %.6f, t %.6f\n", a, b, c, discriminant, t);
+			//if (r->pixelId == DBG_IDX && s == 4) printf("hit_scene: a %.6f, b %.6f, c %.6f, d %.6f, t %.6f\n", a, b, c, discriminant, t);
 			if (t < closest_hit && t > t_min) {
 				closest_hit = t;
 				hit_idx = s;
@@ -217,7 +215,7 @@ hit_scene(const ray* rays, const unsigned int num_rays, const sphere* scene, con
 		}
 	}
 
-	if (r->pixelId == DBG_IDX) printf("hit_scene: hit_idx %d, closest_hit %.2f\n", hit_idx, closest_hit);
+	//if (r->pixelId == DBG_IDX) printf("hit_scene: hit_idx %d, closest_hit %.2f\n", hit_idx, closest_hit);
 	hits[i].hit_t = closest_hit;
 	hits[i].hit_idx = hit_idx;
 }

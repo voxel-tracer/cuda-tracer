@@ -1,20 +1,22 @@
 #ifndef UTILS_H_
 #define UTILS_H_
 
-#define M_PI       3.14159265358979323846   // pi
-#define M_PI_2     1.57079632679489661923   // pi/2
-#define M_PI_4     0.785398163397448309616  // pi/4
+//#define M_PI       3.14159265358979323846   // pi
+//#define M_PI_2     1.57079632679489661923   // pi/2
+//#define M_PI_4     0.785398163397448309616  // pi/4
 
 #include <cstdlib>
 #include <vector_functions.h>
 #include <helper_math.h>
+#define _USE_MATH_DEFINES
+#include <math.h>
 
 // Used to seed the generator.           
 inline void fast_srand(int seed);
 
 // Compute a pseudorandom integer.
 // Output value in range [0, 32767]
-inline float drand48(void);
+float drand48(void);
 float3 random_cosine_direction();
 float3 random_to_sphere();
 float3 random_to_sphere(float radius, float distance_squared);

@@ -9,7 +9,7 @@ inline void fast_srand(int seed) {
 
 // Compute a pseudorandom integer.
 // Output value in range [0, 32767]
-inline float drand48(void) {
+float drand48(void) {
 	g_seed = (214013 * g_seed + 2531011);
 	return (float)((g_seed >> 16) & 0x7FFF) / 32767;
 }
