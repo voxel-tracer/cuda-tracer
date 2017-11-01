@@ -147,19 +147,17 @@ bool renderer::color(int ray_idx) {
 		return false;
 	}
 
-	hit_record rec;
 	sphere *sphr = (sphere*)(world->list[hit.hit_idx]);
-	rec.t = hit.hit_t;
-	rec.p = r.point_at_parameter(hit.hit_t);
-	rec.normal = (rec.p - sphr->center) / sphr->radius;
-	rec.mat_ptr = sphr->mat_ptr;
+	float3 hit_p = r.point_at_parameter(hit.hit_t);
+	hit_record rec(hit.hit_t, hit_p, (hit_p - sphr->center) / sphr->radius, sphr->mat_idx);
+	const material *hit_mat = world->materials[rec.mat_idx];
 
 	scatter_record srec;
-	const float3& emitted = rec.mat_ptr->emitted(r, rec, rec.p);
+	const float3& emitted =  hit_mat->emitted(r, rec, rec.p);
 	r.color += r.not_absorbed*emitted;
 	//if (s.pixelId==DBG_IDX && s.color.squared_length() > 10) printf("white acne at %d\n", s.pixelId);
 	//if (s.pixelId == DBG_IDX) printf("emitted=(%.2f,%.2f,%.2f), not_absorbed=%.6f\n", emitted[0], emitted[1], emitted[2], s.not_absorbed.squared_length());
-	if ((++r.depth) <= max_depth && rec.mat_ptr->scatter(r, rec, light_shape, srec)) {
+	if ((++r.depth) <= max_depth && hit_mat->scatter(r, rec, light_shape, srec)) {
 		r.direction = srec.scattered.direction;
 		r.origin = srec.scattered.origin;
 		r.not_absorbed *= srec.attenuation;
@@ -182,15 +180,13 @@ bool renderer::simple_color(int ray_idx) {
 		return false;
 	}
 
-	hit_record rec;
 	sphere *sphr = (sphere*)(world->list[hit.hit_idx]);
-	rec.t = hit.hit_t;
-	rec.p = r.point_at_parameter(hit.hit_t);
-	rec.normal = (rec.p - sphr->center) / sphr->radius;
-	rec.mat_ptr = sphr->mat_ptr;
+	float3 hit_p = r.point_at_parameter(hit.hit_t);
+	hit_record rec(hit.hit_t, hit_p, (hit_p - sphr->center) / sphr->radius, sphr->mat_idx);
+	const material *hit_mat = world->materials[rec.mat_idx];
 
 	scatter_record srec;
-	if ((++r.depth) <= max_depth && scatter_lambertian(rec.mat_ptr, r, rec, light_shape, srec)) {
+	if ((++r.depth) <= max_depth && scatter_lambertian(hit_mat, r, rec, light_shape, srec)) {
 		r.origin = srec.scattered.origin;
 		r.direction = srec.scattered.direction;
 		r.not_absorbed *= srec.attenuation;

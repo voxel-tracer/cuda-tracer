@@ -4,10 +4,12 @@
 #include "sphere.h"
 
 struct hitable_list {
-	hitable_list(sphere **l, int n) { list = l; list_size = n; }
+	hitable_list(const sphere **l, int ls, const material **m, int ms): list(l), list_size(ls), materials(m), material_size(ms) {}
 
-	sphere **list;
-	int list_size;
+	const sphere **list;
+	const int list_size;
+	const material **materials;
+	const int material_size;
 };
 
 #endif /* HITABLE_LIST_H_ */

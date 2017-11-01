@@ -9,14 +9,18 @@
 struct material;
 
 struct hit_record {
+	hit_record() {}
+	hit_record(float _t, const float3& _p, const float3& n, int _mat_idx): t(_t), p(_p), normal(n), mat_idx(_mat_idx) {}
+	hit_record(const hit_record& rec): t(rec.t), p(rec.p), normal(rec.normal), mat_idx(rec.mat_idx) {}
+
 	float t;
 	float3 p;
 	float3 normal;
-	const material *mat_ptr;
+	int mat_idx;
 };
 
 struct sphere {
-	sphere(float3 cen, float r, const material *mat) { center = cen; radius = r; mat_ptr = mat; }
+	sphere(float3 cen, float r, int midx): center(cen), radius(r), mat_idx(midx) { }
 	bool hit(const ray& r, float t_min, float t_max, hit_record& rec) const {
 		float3 oc = r.origin - center;
 		float a = dot(r.direction, r.direction);
@@ -27,18 +31,12 @@ struct sphere {
 		if (discriminant > 0) {
 			float temp = (-b - sqrt(b*b - a*c)) / a;
 			if (temp < t_max && temp > t_min) {
-				rec.t = temp;
-				rec.p = r.point_at_parameter(rec.t);
-				rec.normal = (rec.p - center) / radius;
-				rec.mat_ptr = mat_ptr;
+				rec = hit_record(temp, r.point_at_parameter(temp), (rec.p - center) / radius, mat_idx);
 				return true;
 			}
 			temp = (-b + sqrt(b*b - a*c)) / a;
 			if (temp < t_max && temp > t_min) {
-				rec.t = temp;
-				rec.p = r.point_at_parameter(rec.t);
-				rec.normal = (rec.p - center) / radius;
-				rec.mat_ptr = mat_ptr;
+				rec = hit_record(temp, r.point_at_parameter(temp), (rec.p - center) / radius, mat_idx);
 				return true;
 			}
 		}
@@ -65,7 +63,7 @@ struct sphere {
 
 	float3 center;
 	float radius;
-	const material *mat_ptr;
+	const int mat_idx;
 };
 
 #endif /* SPHERE_H_ */
