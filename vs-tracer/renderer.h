@@ -78,6 +78,5 @@ public:
 private:
 	sphere *light_shape;
 	int* pixel_idx;
-	sample* samples;
 	inline void generate_ray(int ray_idx, int x, int y);
 };
