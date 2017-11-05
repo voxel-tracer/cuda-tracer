@@ -60,6 +60,7 @@ public:
 	unsigned int max_depth;
 	float min_attenuation;
 
+	sample* samples;
 	ray* h_rays;
 	ray* d_rays;
 	cu_hit* h_hits;

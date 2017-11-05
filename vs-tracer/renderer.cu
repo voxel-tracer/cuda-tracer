@@ -52,9 +52,7 @@ inline void renderer::generate_ray(int ray_idx, int x, int y)
 	float u = float(x + drand48()) / float(nx);
 	float v = float(y + drand48()) / float(ny);
 	cam->get_ray(u, v, h_rays[ray_idx]);
-	h_rays[ray_idx].pixelId = (ny - y - 1)*nx + x;
-	h_rays[ray_idx].color = make_float3(0, 0, 0);
-	h_rays[ray_idx].not_absorbed = make_float3(1, 1, 1);
+	samples[ray_idx] = sample((ny - y - 1)*nx + x);
 	h_rays[ray_idx].depth = 0;
 }
 
@@ -65,6 +63,7 @@ void renderer::prepare_kernel()
 	scene_size = 500;
 	
 	pixels = new pixel[num_pixels];
+	samples = new sample[num_pixels];
 	h_rays = new ray[num_pixels];
 	h_colors = new float3[num_pixels];
 	h_hits = new cu_hit[num_pixels];
@@ -133,6 +132,7 @@ ray* renderer::generate_rays(ray* rays)
 
 bool renderer::color(int ray_idx) {
 	ray& r = h_rays[ray_idx];
+	sample& s = samples[ray_idx];
 	const cu_hit& hit = h_hits[ray_idx];
 
 	if (hit.hit_idx == -1) {
@@ -143,7 +143,7 @@ bool renderer::color(int ray_idx) {
 		float t = 0.5*(unit_direction.y + 1.0);
 		float3 sky_clr = 1.0* ((1 - t)*make_float3(1.0, 1.0, 1.0) + t*make_float3(0.5, 0.7, 1.0));
 		//float3 sky_clr(0, 0, 0);
-		r.color += r.not_absorbed*sky_clr;
+		s.color += s.not_absorbed*sky_clr;
 		return false;
 	}
 
@@ -154,13 +154,13 @@ bool renderer::color(int ray_idx) {
 
 	scatter_record srec;
 	const float3& emitted =  hit_mat->emitted(r, rec, rec.p);
-	r.color += r.not_absorbed*emitted;
+	s.color += s.not_absorbed*emitted;
 	//if (s.pixelId==DBG_IDX && s.color.squared_length() > 10) printf("white acne at %d\n", s.pixelId);
 	//if (s.pixelId == DBG_IDX) printf("emitted=(%.2f,%.2f,%.2f), not_absorbed=%.6f\n", emitted[0], emitted[1], emitted[2], s.not_absorbed.squared_length());
 	if ((++r.depth) <= max_depth && hit_mat->scatter(r, rec, light_shape, srec)) {
 		r.direction = srec.scattered.direction;
 		r.origin = srec.scattered.origin;
-		r.not_absorbed *= srec.attenuation;
+		s.not_absorbed *= srec.attenuation;
 		return true;
 	}
 
@@ -169,6 +169,7 @@ bool renderer::color(int ray_idx) {
 
 bool renderer::simple_color(int ray_idx) {
 	ray& r = h_rays[ray_idx];
+	sample& s = samples[ray_idx];
 	const cu_hit& hit = h_hits[ray_idx];
 
 	if (hit.hit_idx == -1) {
@@ -176,7 +177,7 @@ bool renderer::simple_color(int ray_idx) {
 		float3 unit_direction = normalize(r.direction);
 		float t = 0.5*(unit_direction.y + 1.0);
 		float3 sky_clr = 1.0* ((1 - t)*make_float3(1.0, 1.0, 1.0) + t*make_float3(0.5, 0.7, 1.0));
-		r.color += r.not_absorbed*sky_clr;
+		s.color += s.not_absorbed*sky_clr;
 		return false;
 	}
 
@@ -189,7 +190,7 @@ bool renderer::simple_color(int ray_idx) {
 	if ((++r.depth) <= max_depth && scatter_lambertian(hit_mat, r, rec, light_shape, srec)) {
 		r.origin = srec.scattered.origin;
 		r.direction = srec.scattered.direction;
-		r.not_absorbed *= srec.attenuation;
+		s.not_absorbed *= srec.attenuation;
 		return true;
 	}
 
@@ -270,10 +271,10 @@ void renderer::compact_rays()
 	// first step only generate scattered rays and compact them
 	for (unsigned int i = 0; i < numpixels(); ++i)
 	{
-		unsigned int pixelId = h_rays[i].pixelId;
+		unsigned int pixelId = samples[i].pixelId;
 		if (!simple_color(i)) { // is ray no longer active ?
 			// cumulate its color
-			h_colors[pixelId] += h_rays[i].color;
+			h_colors[pixelId] += samples[i].color;
 			++(pixels[pixelId].done);
 			//if (pixelId == DBG_IDX) printf("sample done\n");
 
@@ -298,4 +299,5 @@ void renderer::destroy() {
 
 	// Free host memory
 	free(h_hits);
+	delete[] samples;
 }
