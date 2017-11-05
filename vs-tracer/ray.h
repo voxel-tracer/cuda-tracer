@@ -28,4 +28,17 @@ struct sample {
 	sample(const sample& s) { pixelId = s.pixelId; color = s.color; not_absorbed = s.not_absorbed; }
 };
 
+struct clr_rec {
+	float3 color;
+	float3 origin;
+	float3 direction;
+	bool done;
+
+	clr_rec() {
+		color = make_float3(0, 0, 0);
+		origin = make_float3(0, 0, 0);
+		direction = make_float3(0, 0, 0);
+	}
+};
+
 #endif /* RAY_H_ */

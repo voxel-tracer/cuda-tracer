@@ -45,10 +45,11 @@ public:
 	void update_camera();
 
 	bool color(int ray_idx);
-	bool simple_color(int ray_idx);
 	ray* generate_rays(ray* rays);
 	void run_kernel();
 	void compact_rays();
+	void simple_color();
+	void simple_compact_rays();
 
 	void destroy();
 
@@ -61,6 +62,7 @@ public:
 	float min_attenuation;
 
 	sample* samples;
+	clr_rec* h_clrs;
 	ray* h_rays;
 	ray* d_rays;
 	cu_hit* h_hits;

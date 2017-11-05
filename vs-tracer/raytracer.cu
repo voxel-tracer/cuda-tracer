@@ -278,7 +278,7 @@ int main(int argc, char** argv)
 			// compute ray-world intersections
 			r.run_kernel();
 			// compact active rays
-			r.compact_rays();
+			r.simple_compact_rays();
 		} else if (rendering) {
 			rendering = false;
 			w->set_title("Voxel Tracer");
