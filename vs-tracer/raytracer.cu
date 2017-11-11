@@ -27,9 +27,9 @@ struct window {
 	bool quit;
 	bool mouse_drag;
 
-	float theta = 80 * M_PI / 180;
-	float phi = 45 * M_PI / 180;
-	const float delta = 1 * M_PI / 180;
+	float theta = (float)(80 * M_PI / 180);
+	float phi = (float)(45 * M_PI / 180);
+	const float delta = (float)(1 * M_PI / 180);
 
 	renderer& w_r;
 	camera *w_cam;
@@ -87,7 +87,7 @@ struct window {
 					int my = event.motion.yrel;
 					theta += -my*delta;
 					if (theta < delta) theta = delta;
-					if (theta >(M_PI_2 - delta)) theta = M_PI_2 - delta;
+					if (theta > (M_PI_2 - delta)) theta = (float)(M_PI_2 - delta);
 					phi += -mx*delta;
 					w_cam->look_from(theta, phi);
 					printf("look_from(%f, %f)\n", theta, phi);
@@ -119,117 +119,117 @@ struct window {
 
 void only_lambertians(hitable_list **scene, camera **cam, sphere **light_shape, float aspect)
 {
-	const material **materials = new const material*[6];
-	materials[0] = make_lambertian(hex2float3(0xe65d3e));
-	materials[1] = make_lambertian(hex2float3(0xf1a26d));
-	materials[2] = make_lambertian(hex2float3(0xfeda4b));
-	materials[3] = make_lambertian(hex2float3(0xfefba8));
-	materials[4] = make_lambertian(hex2float3(0x5b180c));
-	materials[5] = make_diffuse_light(make_float3(100, 100, 100));
+	material *materials = new material[6];
+	materials[0] = *make_lambertian(hex2float3(0xe65d3e));
+	materials[1] = *make_lambertian(hex2float3(0xf1a26d));
+	materials[2] = *make_lambertian(hex2float3(0xfeda4b));
+	materials[3] = *make_lambertian(hex2float3(0xfefba8));
+	materials[4] = *make_lambertian(hex2float3(0x5b180c));
+	materials[5] = *make_diffuse_light(make_float3(100, 100, 100));
 	const int num_materials = 6;
 	const int num_rnd_mats = 4;
 	const int floor_mat_idx = 4;
 	const int light_mat_idx = 5;
 	int n = 500;
-	const sphere **list = new const sphere*[n + 1];
+	sphere *list = new sphere[n + 1];
 	int i = 0;
-	list[i++] = new sphere(make_float3(0, -1000, 0), 1000, floor_mat_idx);
+	list[i++] = sphere(make_float3(0, -1000, 0), 1000, floor_mat_idx);
 	for (int a = -11; a < 11; a++) {
 		for (int b = -11; b < 11; b++) {
 			float choose_mat = drand48();
-			float3 center = make_float3(a + 0.9*drand48(), 0.2, b + 0.9*drand48());
-			if (length(center - make_float3(4, 0.2, 0)) > 0.9) {
-				list[i++] = new sphere(center, 0.2, int(drand48()*num_rnd_mats));
+			float3 center = make_float3(a + 0.9f*drand48(), 0.2f, b + 0.9f*drand48());
+			if (length(center - make_float3(4, 0.2f, 0)) > 0.9f) {
+				list[i++] = sphere(center, 0.2f, int(drand48()*num_rnd_mats));
 			}
 		}
 	}
 
-	list[i++] = new sphere(make_float3(-4, 1, 0), 1.0, int(drand48()*num_rnd_mats));
-	list[i++] = new sphere(make_float3(0, 1, 0), 1.0, int(drand48()*num_rnd_mats));
-	list[i++] = new sphere(make_float3(4, 1, 0), 1.0, int(drand48()*num_rnd_mats));
+	list[i++] = sphere(make_float3(-4, 1, 0), 1.0, int(drand48()*num_rnd_mats));
+	list[i++] = sphere(make_float3(0, 1, 0), 1.0, int(drand48()*num_rnd_mats));
+	list[i++] = sphere(make_float3(4, 1, 0), 1.0, int(drand48()*num_rnd_mats));
 	sphere *light = new sphere(make_float3(10, 10, 10), .5, light_mat_idx);
-	list[i++] = light;
+	list[i++] = *light;
 
 	*light_shape = light;
 	*scene = new hitable_list(list, i, materials, num_materials);
-	*cam = new camera(make_float3(13, 2, 3), make_float3(0, 0, 0), make_float3(0, 1, 0), 20, aspect, 0.1, 10.0);
+	*cam = new camera(make_float3(13, 2, 3), make_float3(0, 0, 0), make_float3(0, 1, 0), 20, aspect, 0.1f, 10.0f);
 }
 
 void simple_lambertians(hitable_list **scene, camera **cam, sphere **light_shape, float aspect)
 {
 	int n = 500;
-	const sphere **list = new const sphere*[n + 1];
-	const material **materials = new const material*[n + 1];
+	sphere *list = new sphere[n + 1];
+	material *materials = new material[n + 1];
 
 	int i = 0;
-	materials[i] = make_lambertian(make_float3(drand48(), drand48(), drand48()));
-	list[i++] = new sphere(make_float3(0, -1000, 0), 1000, i);
+	materials[i] = *make_lambertian(make_float3(drand48(), drand48(), drand48()));
+	list[i++] = sphere(make_float3(0, -1000, 0), 1000, i);
 	for (int a = -11; a < 11; a++) {
 		for (int b = -11; b < 11; b++) {
-			float3 center = make_float3(a + 0.9*drand48(), 0.2, b + 0.9*drand48());
-			if (length(center - make_float3(4, 0.2, 0)) > 0.9) {
-				materials[i] = make_lambertian(make_float3(drand48(), drand48(), drand48()));
-				list[i++] = new sphere(center, 0.2, i);
+			float3 center = make_float3(a + 0.9f*drand48(), 0.2f, b + 0.9f*drand48());
+			if (length(center - make_float3(4, 0.2f, 0)) > 0.9f) {
+				materials[i] = *make_lambertian(make_float3(drand48(), drand48(), drand48()));
+				list[i++] = sphere(center, 0.2f, i);
 			}
 		}
 	}
 
-	materials[i] = make_lambertian(make_float3(drand48(), drand48(), drand48()));
-	list[i++] = new sphere(make_float3(-4, 1, 0), 1.0, i);
-	materials[i] = make_lambertian(make_float3(drand48(), drand48(), drand48()));
-	list[i++] = new sphere(make_float3(0, 1, 0), 1.0, i);
-	materials[i] = make_lambertian(make_float3(drand48(), drand48(), drand48()));
-	list[i++] = new sphere(make_float3(4, 1, 0), 1.0, i);
+	materials[i] = *make_lambertian(make_float3(drand48(), drand48(), drand48()));
+	list[i++] = sphere(make_float3(-4, 1, 0), 1.0, i);
+	materials[i] = *make_lambertian(make_float3(drand48(), drand48(), drand48()));
+	list[i++] = sphere(make_float3(0, 1, 0), 1.0, i);
+	materials[i] = *make_lambertian(make_float3(drand48(), drand48(), drand48()));
+	list[i++] = sphere(make_float3(4, 1, 0), 1.0, i);
 
 	*light_shape = NULL;
 	*scene = new hitable_list(list, i, materials, i);
-	*cam = new camera(make_float3(13, 2, 3), make_float3(0, 0, 0), make_float3(0, 1, 0), 20, aspect, 0.1, 10.0);
+	*cam = new camera(make_float3(13, 2, 3), make_float3(0, 0, 0), make_float3(0, 1, 0), 20, aspect, 0.1f, 10.0f);
 }
 
-void random_scene(hitable_list **scene, camera **cam, sphere **light_shape, float aspect)
-{
-    int n = 500;
-	const sphere **list = new const sphere*[n + 1];
-	const material **materials = new const material*[n + 1];
-
-	int i = 0;
-	materials[i] = make_lambertian(make_float3(0.5, 0.5, 0.5));
-    list[i++] = new sphere(make_float3(0,-1000,0), 1000, i);
-    for (int a = -11; a < 11; a++) {
-        for (int b = -11; b < 11; b++) {
-            float choose_mat = drand48();
-			float3 center = make_float3(a + 0.9*drand48(), 0.2, b + 0.9*drand48());
-            if (length(center- make_float3(4,0.2,0)) > 0.9) {
-                if (choose_mat < 0.8) {  // diffuse
-					materials[i] = make_lambertian(make_float3(drand48()*drand48(), drand48()*drand48(), drand48()*drand48()));
-                    list[i++] = new sphere(center, 0.2, i);
-                }
-                else if (choose_mat < 0.95) { // metal
-					materials[i] = make_metal(make_float3(0.5*(1 + drand48()), 0.5*(1 + drand48()), 0.5*(1 + drand48())), 0.5*drand48());
-                    list[i++] = new sphere(center, 0.2, i);
-                }
-                else {  // glass
-					materials[i] = make_dielectric(1.5);
-                    list[i++] = new sphere(center, 0.2, i);
-                }
-            }
-        }
-    }
-
-	materials[i] = make_dielectric(1.5);
-    list[i++] = new sphere(make_float3(0, 1, 0), 1.0, i);
-	materials[i] = make_lambertian(make_float3(0.4, 0.2, 0.1));
-    list[i++] = new sphere(make_float3(-4, 1, 0), 1.0, i);
-	materials[i] = make_metal(make_float3(0.7, 0.6, 0.5), 0.0);
-    list[i++] = new sphere(make_float3(4, 1, 0), 1.0, i);
-
-	materials[i] = make_diffuse_light(make_float3(200, 200, 100));
-	*light_shape = new sphere(make_float3(10, 10, 10), .5, i);
-	list[i++] = *light_shape;
-
-	*scene = new hitable_list(list, i, materials, i);
-	*cam = new camera(make_float3(13, 2, 3), make_float3(0, 0, 0), make_float3(0, 1, 0), 20, aspect, 0.1, 10.0);
-}
+//void random_scene(hitable_list **scene, camera **cam, sphere **light_shape, float aspect)
+//{
+//    int n = 500;
+//	const sphere **list = new const sphere*[n + 1];
+//	const material **materials = new const material*[n + 1];
+//
+//	int i = 0;
+//	materials[i] = make_lambertian(make_float3(0.5, 0.5, 0.5));
+//    list[i++] = new sphere(make_float3(0,-1000,0), 1000, i);
+//    for (int a = -11; a < 11; a++) {
+//        for (int b = -11; b < 11; b++) {
+//            float choose_mat = drand48();
+//			float3 center = make_float3(a + 0.9*drand48(), 0.2, b + 0.9*drand48());
+//            if (length(center- make_float3(4,0.2,0)) > 0.9) {
+//                if (choose_mat < 0.8) {  // diffuse
+//					materials[i] = make_lambertian(make_float3(drand48()*drand48(), drand48()*drand48(), drand48()*drand48()));
+//                    list[i++] = new sphere(center, 0.2, i);
+//                }
+//                else if (choose_mat < 0.95) { // metal
+//					materials[i] = make_metal(make_float3(0.5*(1 + drand48()), 0.5*(1 + drand48()), 0.5*(1 + drand48())), 0.5*drand48());
+//                    list[i++] = new sphere(center, 0.2, i);
+//                }
+//                else {  // glass
+//					materials[i] = make_dielectric(1.5);
+//                    list[i++] = new sphere(center, 0.2, i);
+//                }
+//            }
+//        }
+//    }
+//
+//	materials[i] = make_dielectric(1.5);
+//    list[i++] = new sphere(make_float3(0, 1, 0), 1.0, i);
+//	materials[i] = make_lambertian(make_float3(0.4, 0.2, 0.1));
+//    list[i++] = new sphere(make_float3(-4, 1, 0), 1.0, i);
+//	materials[i] = make_metal(make_float3(0.7, 0.6, 0.5), 0.0);
+//    list[i++] = new sphere(make_float3(4, 1, 0), 1.0, i);
+//
+//	materials[i] = make_diffuse_light(make_float3(200, 200, 100));
+//	*light_shape = new sphere(make_float3(10, 10, 10), .5, i);
+//	list[i++] = *light_shape;
+//
+//	*scene = new hitable_list(list, i, materials, i);
+//	*cam = new camera(make_float3(13, 2, 3), make_float3(0, 0, 0), make_float3(0, 1, 0), 20, aspect, 0.1, 10.0);
+//}
 
 /**
  * Host main routine
@@ -237,8 +237,8 @@ void random_scene(hitable_list **scene, camera **cam, sphere **light_shape, floa
 int main(int argc, char** argv)
 {
 	bool print_progress = false;
-	bool write_image = false;
-	bool show_window = true;
+	bool write_image = true;
+	bool show_window = false;
 
 	const int nx = 600;
 	const int ny = 300;
@@ -248,11 +248,11 @@ int main(int argc, char** argv)
 	sphere *light_shape;
 	simple_lambertians(&world, &cam, &light_shape, float(nx) / float(ny));
 
-	const float theta = 1.221730;
-	const float phi = 1.832596;
+	const float theta = 1.221730f;
+	const float phi = 1.832596f;
 	cam->look_from(theta, phi);
 
-	renderer r(cam, world, light_shape, nx, ny, ns, 50, 0.001);
+	renderer r(cam, world, light_shape, nx, ny, ns, 50, 0.001f);
 	r.prepare_kernel();
 
 	window *w;

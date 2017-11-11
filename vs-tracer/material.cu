@@ -36,31 +36,31 @@ material* make_diffuse_light(const float3& e)
 	return mat;
 }
 
-inline bool scatter_lambertian(const material* mat, const ray& ray_in, const hit_record& hrec, const sphere* light_shape, scatter_record& srec)
-{
+__device__ bool scatter_lambertian(const material* mat, const ray& ray_in, const hit_record& hrec, const sphere* light_shape, seed_t seed, scatter_record& srec) {
 	srec.is_specular = false;
 	pdf *p = make_cosine_pdf(hrec.normal);
-	if (light_shape != NULL) {
-		pdf  *plight = make_hitable_pdf(light_shape, hrec.p);
-		p = make_mixture_pdf(plight, p);
-	}
-	srec.scattered = ray(hrec.p, p->generate());
+	//if (light_shape != NULL) {
+	//	pdf  *plight = make_hitable_pdf(light_shape, hrec.p);
+	//	p = make_mixture_pdf(plight, p);
+	//}
+	srec.scattered = ray(hrec.p, p->generate(seed));
 	float pdf_val = p->value(srec.scattered.direction);
 	float scattering_pdf = mat->scattering_pdf(ray_in, hrec, srec.scattered);
 	srec.attenuation = mat->albedo*scattering_pdf / pdf_val;
+	delete p;
 	return pdf_val > 0;
 }
 
-inline bool scatter_metal(const material* mat, const ray& r_in, const hit_record& hrec, scatter_record& srec)
+__device__ inline bool scatter_metal(const material* mat, const ray& r_in, const hit_record& hrec, seed_t seed, scatter_record& srec)
 {
 	float3 reflected = reflect(normalize(r_in.direction), hrec.normal);
-	srec.scattered = ray(hrec.p, reflected + mat->param*random_to_sphere());
+	srec.scattered = ray(hrec.p, reflected + mat->param*random_to_sphere(seed));
 	srec.attenuation = mat->albedo;
 	srec.is_specular = true;
 	return true;
 }
 
-inline bool scatter_dielectric(const material* mat, const ray& r_in, const hit_record& hrec, scatter_record& srec) {
+__device__ inline bool scatter_dielectric(const material* mat, const ray& r_in, const hit_record& hrec, seed_t seed, scatter_record& srec) {
 	float3 outward_normal;
 	float3 reflected = reflect(r_in.direction, hrec.normal);
 	float ni_over_nt;
@@ -71,13 +71,13 @@ inline bool scatter_dielectric(const material* mat, const ray& r_in, const hit_r
 
 	srec.is_specular = true;
 	if (dot(r_in.direction, hrec.normal) > 0) {
-		outward_normal = -1*hrec.normal;
+		outward_normal = -1 * hrec.normal;
 		ni_over_nt = mat->param;
 		cosine = mat->param * dot(r_in.direction, hrec.normal) / length(r_in.direction);
 	}
 	else {
 		outward_normal = hrec.normal;
-		ni_over_nt = 1.0 / mat->param;
+		ni_over_nt = 1.0f / mat->param;
 		cosine = -dot(r_in.direction, hrec.normal) / length(r_in.direction);
 	}
 	if (refract(r_in.direction, outward_normal, ni_over_nt, refracted)) {
@@ -86,7 +86,7 @@ inline bool scatter_dielectric(const material* mat, const ray& r_in, const hit_r
 	else {
 		reflect_probe = 1.0;
 	}
-	if (drand48() < reflect_probe) {
+	if (cu_drand48(seed) < reflect_probe) {
 		srec.scattered = ray(hrec.p, reflected);
 	}
 	else {
@@ -95,29 +95,29 @@ inline bool scatter_dielectric(const material* mat, const ray& r_in, const hit_r
 	return true;
 }
 
-bool material::scatter(const ray& ray_in, const hit_record& rec, const sphere* light_shape, scatter_record& srec) const
+__device__ bool material::scatter(const ray& ray_in, const hit_record& rec, const sphere* light_shape, seed_t seed, scatter_record& srec) const
 {
 	switch (type)
 	{
 	case LAMBERTIAN:
-		return scatter_lambertian(this, ray_in, rec, light_shape, srec);
+		return scatter_lambertian(this, ray_in, rec, light_shape, seed, srec);
 	case METAL:
-		return scatter_metal(this, ray_in, rec, srec);
+		return scatter_metal(this, ray_in, rec, seed, srec);
 	case DIELECTRIC:
-		return scatter_dielectric(this, ray_in, rec, srec);
+		return scatter_dielectric(this, ray_in, rec, seed, srec);
 	default:
 		// DIFFUSE_LIGHT is an example of a material that doesn't scatter light
 		return false;
 	}
 }
 
-float lambertian_scattering_pdf(const material* mat, const ray& r_in, const hit_record& rec, const ray& scattered) {
+__device__ float lambertian_scattering_pdf(const material* mat, const ray& r_in, const hit_record& rec, const ray& scattered) {
 	float cosine = dot(rec.normal, normalize(scattered.direction));
 	if (cosine < 0) return 0;
 	return cosine / M_PI;
 }
 
-float material::scattering_pdf(const ray& r_in, const hit_record& rec, const ray& scattered) const
+__device__ float material::scattering_pdf(const ray& r_in, const hit_record& rec, const ray& scattered) const
 {
 	if (type == LAMBERTIAN)
 		return lambertian_scattering_pdf(this, r_in, rec, scattered);

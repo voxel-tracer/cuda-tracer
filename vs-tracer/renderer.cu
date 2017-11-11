@@ -21,20 +21,6 @@ void err(cudaError_t err, char *msg)
 	}
 }
 
-sphere* init_cu_scene(const hitable_list* world)
-{
-	const unsigned int size = world->list_size;
-	sphere* scene = (sphere*)malloc(size * sizeof(sphere));
-	for (int i = 0; i < size; i++)
-	{
-		const sphere *s = (sphere*)world->list[i];
-		scene[i].center = make_float3(s->center.x, s->center.y, s->center.z);
-		scene[i].radius = s->radius;
-	}
-
-	return scene;
-}
-
 struct pixel_compare {
 	const pixel* pixels;
 	pixel_compare(pixel* _pixels) { pixels = _pixels; }
@@ -58,20 +44,19 @@ inline void renderer::generate_ray(int ray_idx, int x, int y)
 void renderer::prepare_kernel()
 {
 	const unsigned int num_pixels = nx*ny;
-	sphere *h_scene = init_cu_scene(world);
-	scene_size = 500;
 	
 	pixels = new pixel[num_pixels];
 	h_clrs = new clr_rec[num_pixels];
 	samples = new sample[num_pixels];
 	h_rays = new ray[num_pixels];
 	h_colors = new float3[num_pixels];
-	h_hits = new cu_hit[num_pixels];
 	pixel_idx = new int[num_pixels];
 	
 	// allocate device memory for input
     d_scene = NULL;
-	err(cudaMalloc((void **)&d_scene, scene_size * sizeof(sphere)), "allocate device d_scene");
+	err(cudaMalloc((void **)&d_scene, world->list_size * sizeof(sphere)), "allocate device d_scene");
+	d_materials = NULL;
+	err(cudaMalloc((void **)&d_materials, world->material_size * sizeof(material)), "allocate device d_materials");
 
     d_rays = NULL;
 	err(cudaMalloc((void **)&d_rays, num_pixels * sizeof(ray)), "allocate device d_rays");
@@ -79,11 +64,15 @@ void renderer::prepare_kernel()
     d_hits = NULL;
 	err(cudaMalloc((void **)&d_hits, num_pixels * sizeof(cu_hit)), "allocate device d_hits");
 
+	d_clrs = NULL;
+	err(cudaMalloc((void **)&d_clrs, num_pixels * sizeof(clr_rec)), "allocate device d_clrs");
+
     // Copy the host input in host memory to the device input in device memory
-	err(cudaMemcpy(d_scene, h_scene, world->list_size * sizeof(sphere), cudaMemcpyHostToDevice), "copy scene from host to device");
+	err(cudaMemcpy(d_scene, world->list, world->list_size * sizeof(sphere), cudaMemcpyHostToDevice), "copy scene from host to device");
+	err(cudaMemcpy(d_materials, world->materials, world->material_size * sizeof(material), cudaMemcpyHostToDevice), "copy materials from host to device");
 
 	// set temporary variables
-	for (int i = 0; i < num_pixels; i++)
+	for (unsigned int i = 0; i < num_pixels; i++)
 	{
 		pixels[i].id = i;
 		pixels[i].samples = 1;
@@ -91,21 +80,18 @@ void renderer::prepare_kernel()
 	}
 
 	//clock_t start = clock();
-	generate_rays(h_rays);
+	generate_rays();
 	//generate += clock() - start;
 
 	num_rays = num_pixels;
-
-	free(h_scene);
 }
-
 
 void renderer::update_camera()
 {
 	const unsigned int num_pixels = numpixels();
 
 	// set temporary variables
-	for (int i = 0; i < num_pixels; i++)
+	for (unsigned int i = 0; i < num_pixels; i++)
 	{
 		h_colors[i] = make_float3(0, 0, 0);
 		pixels[i].id = i;
@@ -115,91 +101,89 @@ void renderer::update_camera()
 	}
 
 	//clock_t start = clock();
-	generate_rays(h_rays);
+	generate_rays();
 	//generate += clock() - start;
 	num_rays = num_pixels;
 }
 
-ray* renderer::generate_rays(ray* rays)
+void renderer::generate_rays()
 {
 	unsigned int ray_idx = 0;
 	for (int j = ny - 1; j >= 0; j--)
 		for (int i = 0; i < nx; ++i, ++ray_idx)
 			generate_ray(ray_idx, i, j);
-
-	return rays;
 }
 
 bool renderer::color(int ray_idx) {
-	ray& r = h_rays[ray_idx];
-	sample& s = samples[ray_idx];
-	const cu_hit& hit = h_hits[ray_idx];
+	//ray& r = h_rays[ray_idx];
+	//sample& s = samples[ray_idx];
+	//const cu_hit& hit = h_hits[ray_idx];
 
-	if (hit.hit_idx == -1) {
-		//if (s.pixelId == DBG_IDX)	printf("NO_HIT\n");
+	//if (hit.hit_idx == -1) {
+	//	//if (s.pixelId == DBG_IDX)	printf("NO_HIT\n");
 
-		// no intersection with spheres, return sky color
-		float3 unit_direction = normalize(r.direction);
-		float t = 0.5*(unit_direction.y + 1.0);
-		float3 sky_clr = 1.0* ((1 - t)*make_float3(1.0, 1.0, 1.0) + t*make_float3(0.5, 0.7, 1.0));
-		//float3 sky_clr(0, 0, 0);
-		s.color += s.not_absorbed*sky_clr;
-		return false;
-	}
+	//	// no intersection with spheres, return sky color
+	//	float3 unit_direction = normalize(r.direction);
+	//	float t = 0.5*(unit_direction.y + 1.0);
+	//	float3 sky_clr = 1.0* ((1 - t)*make_float3(1.0, 1.0, 1.0) + t*make_float3(0.5, 0.7, 1.0));
+	//	//float3 sky_clr(0, 0, 0);
+	//	s.color += s.not_absorbed*sky_clr;
+	//	return false;
+	//}
 
-	sphere *sphr = (sphere*)(world->list[hit.hit_idx]);
-	float3 hit_p = r.point_at_parameter(hit.hit_t);
-	hit_record rec(hit.hit_t, hit_p, (hit_p - sphr->center) / sphr->radius, sphr->mat_idx);
-	const material *hit_mat = world->materials[rec.mat_idx];
+	//sphere *sphr = (sphere*)(world->list[hit.hit_idx]);
+	//float3 hit_p = r.point_at_parameter(hit.hit_t);
+	//hit_record rec(hit.hit_t, hit_p, (hit_p - sphr->center) / sphr->radius, sphr->mat_idx);
+	//const material *hit_mat = world->materials[rec.mat_idx];
 
-	scatter_record srec;
-	const float3& emitted =  hit_mat->emitted(r, rec, rec.p);
-	s.color += s.not_absorbed*emitted;
-	//if (s.pixelId==DBG_IDX && s.color.squared_length() > 10) printf("white acne at %d\n", s.pixelId);
-	//if (s.pixelId == DBG_IDX) printf("emitted=(%.2f,%.2f,%.2f), not_absorbed=%.6f\n", emitted[0], emitted[1], emitted[2], s.not_absorbed.squared_length());
-	if ((++r.depth) <= max_depth && hit_mat->scatter(r, rec, light_shape, srec)) {
-		r.direction = srec.scattered.direction;
-		r.origin = srec.scattered.origin;
-		s.not_absorbed *= srec.attenuation;
-		return true;
-	}
+	//scatter_record srec;
+	//const float3& emitted =  hit_mat->emitted(r, rec, rec.p);
+	//s.color += s.not_absorbed*emitted;
+	////if (s.pixelId==DBG_IDX && s.color.squared_length() > 10) printf("white acne at %d\n", s.pixelId);
+	////if (s.pixelId == DBG_IDX) printf("emitted=(%.2f,%.2f,%.2f), not_absorbed=%.6f\n", emitted[0], emitted[1], emitted[2], s.not_absorbed.squared_length());
+	//if ((++r.depth) <= max_depth && hit_mat->scatter(r, rec, light_shape, srec)) {
+	//	r.direction = srec.scattered.direction;
+	//	r.origin = srec.scattered.origin;
+	//	s.not_absorbed *= srec.attenuation;
+	//	return true;
+	//}
 
 	return false;
 }
 
-void renderer::simple_color() {
-
-	for (int ray_idx = 0; ray_idx < numpixels(); ++ray_idx) {
-		const ray& r = h_rays[ray_idx];
-		const cu_hit& hit = h_hits[ray_idx];
-		clr_rec& crec = h_clrs[ray_idx];
-
-		if (hit.hit_idx == -1) {
-			// no intersection with spheres, return sky color
-			float3 unit_direction = normalize(r.direction);
-			float t = 0.5*(unit_direction.y + 1.0);
-			crec.color = 1.0* ((1 - t)*make_float3(1.0, 1.0, 1.0) + t*make_float3(0.5, 0.7, 1.0));
-			crec.done = true;
-			continue;
-		}
-
-		sphere *sphr = (sphere*)(world->list[hit.hit_idx]);
-		float3 hit_p = r.point_at_parameter(hit.hit_t);
-		hit_record rec(hit.hit_t, hit_p, (hit_p - sphr->center) / sphr->radius, sphr->mat_idx); //TODO move this to sphere class
-		const material *hit_mat = world->materials[rec.mat_idx];
-
-		scatter_record srec;
-		if (r.depth < max_depth && scatter_lambertian(hit_mat, r, rec, light_shape, srec)) {
-			crec.origin = srec.scattered.origin;
-			crec.direction = srec.scattered.direction;
-			crec.color = srec.attenuation;
-			crec.done = false;
-		} else {
-			crec.color = make_float3(0, 0, 0);
-			crec.done = true;
-		}
-	}
-}
+//void renderer::simple_color() {
+//
+//	for (int ray_idx = 0; ray_idx < numpixels(); ++ray_idx) {
+//		const ray& r = h_rays[ray_idx];
+//		const cu_hit& hit = h_hits[ray_idx];
+//		clr_rec& crec = h_clrs[ray_idx];
+//
+//		if (hit.hit_idx == -1) {
+//			// no intersection with spheres, return sky color
+//			float3 unit_direction = normalize(r.direction);
+//			float t = 0.5*(unit_direction.y + 1.0);
+//			crec.color = 1.0* ((1 - t)*make_float3(1.0, 1.0, 1.0) + t*make_float3(0.5, 0.7, 1.0));
+//			crec.done = true;
+//			continue;
+//		}
+//
+//		sphere *sphr = (sphere*)(world->list[hit.hit_idx]);
+//		float3 hit_p = r.point_at_parameter(hit.hit_t);
+//		hit_record rec(hit.hit_t, hit_p, (hit_p - sphr->center) / sphr->radius, sphr->mat_idx); //TODO move this to sphere class
+//		const material *hit_mat = world->materials[rec.mat_idx];
+//
+//		scatter_record srec;
+//		if (r.depth < max_depth && scatter_lambertian(hit_mat, r, rec, light_shape, srec)) {
+//			crec.origin = srec.scattered.origin;
+//			crec.direction = srec.scattered.direction;
+//			crec.color = srec.attenuation;
+//			crec.done = false;
+//		} else {
+//			crec.color = make_float3(0, 0, 0);
+//			crec.done = true;
+//		}
+//	}
+//}
 
 __global__ void
 hit_scene(const ray* rays, const unsigned int num_rays, const sphere* scene, const unsigned int scene_size, float t_min, float t_max, cu_hit* hits)
@@ -248,10 +232,49 @@ hit_scene(const ray* rays, const unsigned int num_rays, const sphere* scene, con
 	hits[i].hit_idx = hit_idx;
 }
 
+__global__ void
+simple_color(const ray* rays, const cu_hit* hits, clr_rec* clrs, const int num_rays, const sphere* spheres, const int num_spheres, const material* materials, const int num_materials, const int max_depth) {
+	const int ray_idx = blockDim.x * blockIdx.x + threadIdx.x;
+	if (ray_idx >= num_rays)
+		return;
+
+	const ray& r = rays[ray_idx];
+	const cu_hit& hit = hits[ray_idx];
+	clr_rec& crec = clrs[ray_idx];
+
+	if (hit.hit_idx == -1) {
+		// no intersection with spheres, return sky color
+		float3 unit_direction = normalize(r.direction);
+		float t = 0.5*(unit_direction.y + 1.0);
+		crec.color = 1.0* ((1 - t)*make_float3(1.0, 1.0, 1.0) + t*make_float3(0.5, 0.7, 1.0));
+		crec.done = true;
+		return;
+	}
+
+	const sphere& sphr = spheres[hit.hit_idx];
+	float3 hit_p = r.point_at_parameter(hit.hit_t);
+	hit_record rec(hit.hit_t, hit_p, (hit_p - sphr.center) / sphr.radius, sphr.mat_idx); //TODO move this to sphere class
+	const material& hit_mat = materials[rec.mat_idx];
+	//printf("ray_idx %d, hit_idx %d, mat_idx %d, mat_type %d\n", ray_idx, hit.hit_idx, rec.mat_idx, hit_mat.type);
+
+	curandStatePhilox4_32_10_t state;
+	curand_init(0, ray_idx, 0, &state);
+	scatter_record srec;
+	if (r.depth < max_depth && scatter_lambertian(&hit_mat, r, rec, NULL, &state, srec)) {
+		crec.origin = srec.scattered.origin;
+		crec.direction = srec.scattered.direction;
+		crec.color = srec.attenuation;
+		crec.done = false;
+	} else {
+		crec.color = make_float3(0, 0, 0);
+		crec.done = true;
+	}
+}
+
 void renderer::run_kernel()
 {
 	cudaProfilerStart();
-	//clock_t start = clock();
+	clock_t start = clock();
 
 	// copying rays to device
 	err(cudaMemcpy(d_rays, h_rays, num_rays * sizeof(ray), cudaMemcpyHostToDevice), "copy rays from host to device");
@@ -259,13 +282,15 @@ void renderer::run_kernel()
 	// Launch the CUDA Kernel
 	int threadsPerBlock = 128;
 	int blocksPerGrid = (num_rays + threadsPerBlock - 1) / threadsPerBlock;
-	hit_scene<<<blocksPerGrid, threadsPerBlock>>>(d_rays, num_rays, d_scene, scene_size, 0.001, FLT_MAX, d_hits);
-	err(cudaGetLastError(), "launch kernel");
+	hit_scene<<<blocksPerGrid, threadsPerBlock>>>(d_rays, num_rays, d_scene, world->list_size, 0.001f, FLT_MAX, d_hits);
+	err(cudaGetLastError(), "launch hit_scene kernel");
+	simple_color<<<blocksPerGrid, threadsPerBlock>>>(d_rays, d_hits, d_clrs, num_rays, d_scene, world->list_size, d_materials, world->material_size, max_depth);
+	err(cudaGetLastError(), "launch simple_color kernel");
 
 	// Copy the results to host
-	err(cudaMemcpy(h_hits, d_hits, num_rays * sizeof(cu_hit), cudaMemcpyDeviceToHost), "copy results from device to host");
+	err(cudaMemcpy(h_clrs, d_clrs, num_rays * sizeof(clr_rec), cudaMemcpyDeviceToHost), "copy results from device to host");
 
-	//kernel += clock() - start;
+	kernel += clock() - start;
 	cudaProfilerStop();
 }
 
@@ -295,8 +320,7 @@ void renderer::compact_rays() {
 }
 
 void renderer::simple_compact_rays() {
-
-	simple_color();
+	clock_t start = clock();
 
 	unsigned int sampled = 0;
 	// first step only generate scattered rays and compact them
@@ -327,16 +351,19 @@ void renderer::simple_compact_rays() {
 	}
 	std::sort(pixel_idx, pixel_idx + numpixels(), pixel_compare(pixels));
 	num_rays = (pixels[pixel_idx[0]].samples <= ns) ? numpixels() : 0;
+
+	compact += clock() - start;
 }
 
 void renderer::destroy() {
 	// Free device global memory
 	err(cudaFree(d_scene), "free device d_scene");
+	err(cudaFree(d_materials), "free device d_materials");
 	err(cudaFree(d_rays), "free device d_rays");
 	err(cudaFree(d_hits), "free device d_hits");
+	err(cudaFree(d_clrs), "free device d_clrs");
 
 	// Free host memory
-	free(h_hits);
 	delete[] samples;
 	delete[] h_clrs;
 }

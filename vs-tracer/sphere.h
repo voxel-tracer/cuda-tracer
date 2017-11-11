@@ -9,8 +9,8 @@
 struct material;
 
 struct hit_record {
-	hit_record() {}
-	hit_record(float _t, const float3& _p, const float3& n, int _mat_idx): t(_t), p(_p), normal(n), mat_idx(_mat_idx) {}
+	__device__ hit_record() {}
+	__host__ __device__ hit_record(float _t, const float3& _p, const float3& n, int _mat_idx): t(_t), p(_p), normal(n), mat_idx(_mat_idx) {}
 	hit_record(const hit_record& rec): t(rec.t), p(rec.p), normal(rec.normal), mat_idx(rec.mat_idx) {}
 
 	float t;
@@ -20,8 +20,9 @@ struct hit_record {
 };
 
 struct sphere {
+	sphere() { }
 	sphere(float3 cen, float r, int midx): center(cen), radius(r), mat_idx(midx) { }
-	bool hit(const ray& r, float t_min, float t_max, hit_record& rec) const {
+	__device__ bool hit(const ray& r, float t_min, float t_max, hit_record& rec) const {
 		float3 oc = r.origin - center;
 		float a = dot(r.direction, r.direction);
 		float b = dot(oc, r.direction);
@@ -43,27 +44,27 @@ struct sphere {
 		return false;
 	}
 
-	float pdf_value(const float3& o, const float3& v) const {
+	__device__ float pdf_value(const float3& o, const float3& v) const {
 		hit_record rec;
-		if (this->hit(ray(o, v), 0.001, FLT_MAX, rec)) {
+		if (this->hit(ray(o, v), 0.001f, FLT_MAX, rec)) {
 			float cos_theta_max = sqrtf(1 - radius*radius / squared_length(center - o));
-			float solid_angle = 2 * M_PI*(1 - cos_theta_max);
+			float solid_angle = (float)(2 * M_PI*(1 - cos_theta_max));
 			return 1 / solid_angle;
 		}
 		return 0;
 	}
 
-	float3 random(const float3& o) const {
+	__device__ float3 random(seed_t seed, const float3& o) const {
 		float3 direction = center - o;
 		float distance_squared = squared_length(direction);
 		onb uvw;
 		uvw.build_from_w(direction);
-		return uvw.local(random_to_sphere(radius, distance_squared));
+		return uvw.local(random_to_sphere(seed, radius, distance_squared));
 	}
 
 	float3 center;
 	float radius;
-	const int mat_idx;
+	int mat_idx;
 };
 
 #endif /* SPHERE_H_ */

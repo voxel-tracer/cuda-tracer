@@ -8,11 +8,11 @@ struct ray {
 	float3 direction;
 	unsigned int depth;
 
-	ray() {}
-	ray(const float3& o, const float3& d) { origin = o; direction = d; }
-	ray(ray& r) { origin = r.origin; direction = r.direction; }
+	__host__ __device__ ray() {}
+	__host__ __device__ ray(const float3& o, const float3& d) { origin = o; direction = d; }
+	__host__ __device__ ray(ray& r) { origin = r.origin; direction = r.direction; }
 
-	float3 point_at_parameter(float t) const { return origin + t*direction; }
+	__host__ __device__ float3 point_at_parameter(float t) const { return origin + t*direction; }
 };
 
 struct sample {

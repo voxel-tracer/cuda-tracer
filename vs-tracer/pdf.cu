@@ -17,27 +17,27 @@ float pdf::value(const float3& direction) const {
 	return 0;
 }
 
-float3 pdf::generate() const {
+__device__ float3 pdf::generate(seed_t seed) const {
 	switch (type) {
 	case COSINE:
-		return uvw.local(random_cosine_direction());
+		return uvw.local(random_cosine_direction(seed));
 	case HITABLE:
-		return ptr->random(o);
+		return ptr->random(seed, o);
 	case MIXTURE:
-		return (drand48() < 0.5) ? p[0]->generate() : p[1]->generate();
+		return (cu_drand48(seed) < 0.5) ? p[0]->generate(seed) : p[1]->generate(seed);
 	}
 
 	return make_float3(1, 0, 0); // we should throw an error
 }
 
-pdf* make_cosine_pdf(const float3& w) {
+__host__ __device__ pdf* make_cosine_pdf(const float3& w) {
 	return new pdf(w);
 }
 
-pdf* make_hitable_pdf(const sphere *p, const float3& origin) {
+__host__ __device__ pdf* make_hitable_pdf(const sphere *p, const float3& origin) {
 	return new pdf(p, origin);
 }
 
-pdf* make_mixture_pdf(pdf *p0, pdf *p1) {
+__host__ __device__ pdf* make_mixture_pdf(pdf *p0, pdf *p1) {
 	return new pdf(p0, p1);
 }

@@ -45,10 +45,10 @@ public:
 	void update_camera();
 
 	bool color(int ray_idx);
-	ray* generate_rays(ray* rays);
+	void generate_rays();
 	void run_kernel();
 	void compact_rays();
-	void simple_color();
+	//void simple_color();
 	void simple_compact_rays();
 
 	void destroy();
@@ -65,10 +65,10 @@ public:
 	clr_rec* h_clrs;
 	ray* h_rays;
 	ray* d_rays;
-	cu_hit* h_hits;
 	cu_hit* d_hits;
+	clr_rec* d_clrs;
 	sphere* d_scene;
-	unsigned int scene_size;
+	material* d_materials;
 
 	pixel* pixels;
 	float3* h_colors;
