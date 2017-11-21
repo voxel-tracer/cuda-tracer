@@ -67,6 +67,9 @@ void renderer::prepare_kernel()
 	d_clrs = NULL;
 	err(cudaMalloc((void **)&d_clrs, num_pixels * sizeof(clr_rec)), "allocate device d_clrs");
 
+	d_rnd_states = NULL;
+	err(cudaMalloc((void **)&d_rnd_states, num_pixels * sizeof(curandStatePhilox4_32_10_t)), "allocate device rnd states");
+
     // Copy the host input in host memory to the device input in device memory
 	err(cudaMemcpy(d_scene, world->list, world->list_size * sizeof(sphere), cudaMemcpyHostToDevice), "copy scene from host to device");
 	err(cudaMemcpy(d_materials, world->materials, world->material_size * sizeof(material), cudaMemcpyHostToDevice), "copy materials from host to device");
@@ -232,8 +235,16 @@ hit_scene(const ray* rays, const unsigned int num_rays, const sphere* scene, con
 	hits[i].hit_idx = hit_idx;
 }
 
+__global__ void init_kernel(curandStatePhilox4_32_10_t* states, const uint num_rays, const uint seed) {
+	const int ray_idx = blockDim.x * blockIdx.x + threadIdx.x;
+	if (ray_idx >= num_rays)
+		return;
+
+	curand_init(seed, ray_idx, 0, &states[ray_idx]);
+}
+
 __global__ void
-simple_color(const ray* rays, const cu_hit* hits, clr_rec* clrs, const int num_rays, const sphere* spheres, const int num_spheres, const material* materials, const int num_materials, const int max_depth) {
+simple_color(const ray* rays, const cu_hit* hits, clr_rec* clrs, curandStatePhilox4_32_10_t* states, const int num_rays, const sphere* spheres, const int num_spheres, const material* materials, const int num_materials, const int max_depth) {
 	const int ray_idx = blockDim.x * blockIdx.x + threadIdx.x;
 	if (ray_idx >= num_rays)
 		return;
@@ -257,10 +268,10 @@ simple_color(const ray* rays, const cu_hit* hits, clr_rec* clrs, const int num_r
 	const material& hit_mat = materials[rec.mat_idx];
 	//printf("ray_idx %d, hit_idx %d, mat_idx %d, mat_type %d\n", ray_idx, hit.hit_idx, rec.mat_idx, hit_mat.type);
 
-	curandStatePhilox4_32_10_t state;
-	curand_init(0, ray_idx, 0, &state);
+	curandStatePhilox4_32_10_t localState = states[ray_idx];
+
 	scatter_record srec;
-	if (r.depth < max_depth && scatter_lambertian(&hit_mat, r, rec, NULL, &state, srec)) {
+	if (r.depth < max_depth && scatter_lambertian(&hit_mat, r, rec, NULL, &localState, srec)) {
 		crec.origin = srec.scattered.origin;
 		crec.direction = srec.scattered.direction;
 		crec.color = srec.attenuation;
@@ -269,6 +280,8 @@ simple_color(const ray* rays, const cu_hit* hits, clr_rec* clrs, const int num_r
 		crec.color = make_float3(0, 0, 0);
 		crec.done = true;
 	}
+
+	states[ray_idx] = localState;
 }
 
 void renderer::run_kernel()
@@ -282,9 +295,13 @@ void renderer::run_kernel()
 	// Launch the CUDA Kernel
 	int threadsPerBlock = 128;
 	int blocksPerGrid = (num_rays + threadsPerBlock - 1) / threadsPerBlock;
+	if (init_rnds) {
+		init_kernel <<<blocksPerGrid, threadsPerBlock >>> (d_rnd_states, num_rays, 0);
+		init_rnds = false;
+	}
 	hit_scene<<<blocksPerGrid, threadsPerBlock>>>(d_rays, num_rays, d_scene, world->list_size, 0.001f, FLT_MAX, d_hits);
 	err(cudaGetLastError(), "launch hit_scene kernel");
-	simple_color<<<blocksPerGrid, threadsPerBlock>>>(d_rays, d_hits, d_clrs, num_rays, d_scene, world->list_size, d_materials, world->material_size, max_depth);
+	simple_color<<<blocksPerGrid, threadsPerBlock>>>(d_rays, d_hits, d_clrs, d_rnd_states, num_rays, d_scene, world->list_size, d_materials, world->material_size, max_depth);
 	err(cudaGetLastError(), "launch simple_color kernel");
 
 	// Copy the results to host
@@ -362,6 +379,7 @@ void renderer::destroy() {
 	err(cudaFree(d_rays), "free device d_rays");
 	err(cudaFree(d_hits), "free device d_hits");
 	err(cudaFree(d_clrs), "free device d_clrs");
+	err(cudaFree(d_rnd_states), "free device d_rnd_states");
 
 	// Free host memory
 	delete[] samples;

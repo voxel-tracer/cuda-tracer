@@ -69,6 +69,8 @@ public:
 	clr_rec* d_clrs;
 	sphere* d_scene;
 	material* d_materials;
+	curandStatePhilox4_32_10_t* d_rnd_states;
+	bool init_rnds = true;
 
 	pixel* pixels;
 	float3* h_colors;
