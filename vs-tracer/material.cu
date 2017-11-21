@@ -38,16 +38,15 @@ material* make_diffuse_light(const float3& e)
 
 __device__ bool scatter_lambertian(const material* mat, const ray& ray_in, const hit_record& hrec, const sphere* light_shape, seed_t seed, scatter_record& srec) {
 	srec.is_specular = false;
-	pdf *p = make_cosine_pdf(hrec.normal);
+	pdf p = pdf(hrec.normal);
 	//if (light_shape != NULL) {
 	//	pdf  *plight = make_hitable_pdf(light_shape, hrec.p);
 	//	p = make_mixture_pdf(plight, p);
 	//}
-	srec.scattered = ray(hrec.p, p->generate(seed));
-	float pdf_val = p->value(srec.scattered.direction);
+	srec.scattered = ray(hrec.p, p.generate(seed));
+	float pdf_val = p.value(srec.scattered.direction);
 	float scattering_pdf = mat->scattering_pdf(ray_in, hrec, srec.scattered);
 	srec.attenuation = mat->albedo*scattering_pdf / pdf_val;
-	delete p;
 	return pdf_val > 0;
 }
 

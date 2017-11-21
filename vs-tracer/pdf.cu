@@ -29,15 +29,3 @@ __device__ float3 pdf::generate(seed_t seed) const {
 
 	return make_float3(1, 0, 0); // we should throw an error
 }
-
-__host__ __device__ pdf* make_cosine_pdf(const float3& w) {
-	return new pdf(w);
-}
-
-__host__ __device__ pdf* make_hitable_pdf(const sphere *p, const float3& origin) {
-	return new pdf(p, origin);
-}
-
-__host__ __device__ pdf* make_mixture_pdf(pdf *p0, pdf *p1) {
-	return new pdf(p0, p1);
-}

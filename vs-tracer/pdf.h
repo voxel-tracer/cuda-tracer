@@ -29,7 +29,3 @@ struct pdf {
 	// MIXTURE
 	pdf *p[2];
 };
-
-__host__ __device__ pdf* make_cosine_pdf(const float3& w);
-__host__ __device__ pdf* make_hitable_pdf(const sphere *p, const float3& origin);
-__host__ __device__ pdf* make_mixture_pdf(pdf *p0, pdf *p1);
