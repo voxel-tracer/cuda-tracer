@@ -213,7 +213,7 @@ hit_scene(const ray* rays, const unsigned int num_rays, const sphere* scene, con
 		float b = oc.x*rd.x + oc.y*rd.y + oc.z*rd.z;
 		float c = (oc.x*oc.x + oc.y*oc.y + oc.z*oc.z) - sr*sr;
 		float discriminant = b*b - a*c;
-		if (discriminant > 0.01) {
+		if (discriminant > 0.01f) {
 			float t = (-b - sqrtf(discriminant)) / a;
 			//if (r->pixelId == DBG_IDX && s == 4) printf("hit_scene: a %.6f, b %.6f, c %.6f, d %.6f, t %.6f\n", a, b, c, discriminant, t);
 			if (t < closest_hit && t > t_min) {
