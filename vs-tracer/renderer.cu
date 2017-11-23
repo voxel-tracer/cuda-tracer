@@ -271,7 +271,7 @@ simple_color(const ray* rays, const cu_hit* hits, clr_rec* clrs, curandStatePhil
 	curandStatePhilox4_32_10_t localState = states[ray_idx];
 
 	scatter_record srec;
-	if (r.depth < max_depth && scatter_lambertian(&hit_mat, r, rec, NULL, &localState, srec)) {
+	if (r.depth < max_depth && scatter_lambertian(&hit_mat, r.direction, rec, NULL, &localState, srec)) {
 		crec.origin = srec.scattered.origin;
 		crec.direction = srec.scattered.direction;
 		crec.color = srec.attenuation;

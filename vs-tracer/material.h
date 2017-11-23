@@ -29,8 +29,8 @@ struct material
 	float3 albedo;
 	float3 _emitted;
 	float param;
-	__device__ bool scatter(const ray& ray_in, const hit_record& rec, const sphere* light_shape, seed_t seed, scatter_record& srec) const;
-	__device__ float scattering_pdf(const ray& r_in, const hit_record& rec, const ray& scattered) const;
+	__device__ bool scatter(const float3& r_dir, const hit_record& rec, const sphere* light_shape, seed_t seed, scatter_record& srec) const;
+	__device__ float scattering_pdf(const float3& r_dir, const hit_record& rec, const ray& scattered) const;
 	float3 emitted(const ray& r_in, const hit_record& rec, const float3 &p) const;
 };
 
@@ -39,6 +39,6 @@ material* make_metal(const float3& albedo, float fuzz);
 material* make_dielectric(float ref_idx);
 material* make_diffuse_light(const float3& e);
 
-__device__ bool scatter_lambertian(const material* mat, const ray& ray_in, const hit_record& hrec, const sphere* light_shape, seed_t seed, scatter_record& srec);
+__device__ bool scatter_lambertian(const material* mat, const float3& r_dir, const hit_record& hrec, const sphere* light_shape, seed_t seed, scatter_record& srec);
 
 #endif /* MATERIAL_H_ */
