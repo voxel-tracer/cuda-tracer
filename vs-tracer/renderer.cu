@@ -38,7 +38,6 @@ inline void renderer::generate_ray(int ray_idx, int x, int y)
 	float v = float(y + drand48()) / float(ny);
 	cam->get_ray(u, v, h_rays[ray_idx]);
 	samples[ray_idx] = sample((ny - y - 1)*nx + x);
-	h_rays[ray_idx].depth = 0;
 }
 
 void renderer::prepare_kernel()
@@ -271,7 +270,7 @@ simple_color(const ray* rays, const cu_hit* hits, clr_rec* clrs, curandStatePhil
 	curandStatePhilox4_32_10_t localState = states[ray_idx];
 
 	scatter_record srec;
-	if (r.depth < max_depth && scatter_lambertian(&hit_mat, r.direction, rec, NULL, &localState, srec)) {
+	if (scatter_lambertian(&hit_mat, r.direction, rec, NULL, &localState, srec)) {
 		crec.origin = srec.scattered.origin;
 		crec.direction = srec.scattered.direction;
 		crec.color = srec.attenuation;
@@ -346,9 +345,9 @@ void renderer::simple_compact_rays() {
 		const clr_rec& crec = h_clrs[i];
 		sample& s = samples[i];
 		unsigned int pixelId = s.pixelId;
-		if (crec.done) { // ray no longer active ?
-			// cumulate its color
-			h_colors[pixelId] += s.not_absorbed*crec.color;
+		if (s.depth == max_depth || crec.done) { // ray no longer active ?
+			if (crec.done) // cumulate its color
+				h_colors[pixelId] += s.not_absorbed*crec.color;
 			++(pixels[pixelId].done);
 			//if (pixelId == DBG_IDX) printf("sample done\n");
 
@@ -363,7 +362,7 @@ void renderer::simple_compact_rays() {
 			s.not_absorbed *= crec.color;
 			h_rays[i].origin = crec.origin;
 			h_rays[i].direction = crec.direction;
-			++(h_rays[i].depth);
+			++s.depth;
 		}
 	}
 	std::sort(pixel_idx, pixel_idx + numpixels(), pixel_compare(pixels));
