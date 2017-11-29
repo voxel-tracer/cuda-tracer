@@ -6,26 +6,26 @@
 struct ray {
 	float3 origin;
 	float3 direction;
-	unsigned int depth;
 
 	__host__ __device__ ray() {}
-	__host__ __device__ ray(const float3& o, const float3& d) { origin = o; direction = d; }
-	__host__ __device__ ray(ray& r) { origin = r.origin; direction = r.direction; }
+	__host__ __device__ ray(const float3& o, const float3& d) :origin(o), direction(d) {}
+	__host__ __device__ ray(ray& r):origin(r.origin), direction(r.direction) {}
 
 	__host__ __device__ float3 point_at_parameter(float t) const { return origin + t*direction; }
 };
 
 struct sample {
-	unsigned int pixelId;
+	uint pixelId;
 	float3 color;
 	float3 not_absorbed;
+	uint depth;
 
 	sample() {}
 	sample(int pId): pixelId(pId) {
 		color = make_float3(0, 0, 0);
 		not_absorbed = make_float3(1, 1, 1);
 	}
-	sample(const sample& s) { pixelId = s.pixelId; color = s.color; not_absorbed = s.not_absorbed; }
+	sample(const sample& s) :pixelId(s.pixelId), color(s.color), not_absorbed(s.not_absorbed), depth(s.depth) {}
 };
 
 struct clr_rec {
