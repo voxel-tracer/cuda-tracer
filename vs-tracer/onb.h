@@ -14,7 +14,7 @@ struct onb {
 	__device__ void build_from_w(const float3& n) {
 		axis[2] = normalize(n);
 		float3 a;
-		if (fabsf(w().x) > 0.9)
+		if (fabsf(w().x) > 0.9999f)
 			a = make_float3(0, 1, 0);
 		else
 			a = make_float3(1, 0, 0);

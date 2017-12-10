@@ -69,7 +69,6 @@ public:
 	clr_rec* d_clrs;
 	sphere* d_scene;
 	material* d_materials;
-	curandStatePhilox4_32_10_t* d_rnd_states;
 	bool init_rnds = true;
 
 	pixel* pixels;
@@ -81,6 +80,7 @@ public:
 
 	unsigned int num_rays;
 private:
+	uint num_runs = 0;
 	sphere *light_shape;
 	int* pixel_idx;
 	inline void generate_ray(int ray_idx, int x, int y);

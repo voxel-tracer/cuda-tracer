@@ -90,7 +90,7 @@ struct window {
 					if (theta > (M_PI_2 - delta)) theta = (float)(M_PI_2 - delta);
 					phi += -mx*delta;
 					w_cam->look_from(theta, phi);
-					printf("look_from(%f, %f)\n", theta, phi);
+					//printf("look_from(%f, %f)\n", theta, phi);
 					w_r.update_camera();
 				}
 				break;
@@ -237,8 +237,8 @@ void simple_lambertians(hitable_list **scene, camera **cam, sphere **light_shape
 int main(int argc, char** argv)
 {
 	bool print_progress = false;
-	bool write_image = true;
-	bool show_window = false;
+	bool write_image = false;
+	bool show_window = true;
 
 	const int nx = 600;
 	const int ny = 300;
