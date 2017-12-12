@@ -251,12 +251,12 @@ __global__ void simple_color(const ray* rays, const cu_hit* hits, clr_rec* clrs,
 	const sphere& sphr = spheres[hit.hit_idx];
 	float3 hit_p = r.point_at_parameter(hit.hit_t);
 	hit_record rec(hit.hit_t, hit_p, (hit_p - sphr.center) / sphr.radius, sphr.mat_idx); //TODO move this to sphere class
-	const material& hit_mat = materials[rec.mat_idx];
+	const material hit_mat = materials[rec.mat_idx];
 	curandStatePhilox4_32_10_t localState;
 	curand_init(0, seed*blockDim.x + threadIdx.x, 0, &localState);
 
 	scatter_record srec;
-	if (scatter_lambertian(&hit_mat, r.direction, rec, NULL, &localState, srec)) {
+	if (hit_mat.scatter(r.direction, rec, NULL, &localState, srec)) {
 		crec.origin = srec.scattered.origin;
 		crec.direction = srec.scattered.direction;
 		crec.color = srec.attenuation;

@@ -29,6 +29,9 @@ struct material
 	float3 albedo;
 	float3 _emitted;
 	float param;
+
+	material() {}
+	__device__ material(const material &m) :type(m.type), albedo(m.albedo), _emitted(m._emitted), param(m.param) {}
 	__device__ bool scatter(const float3& r_dir, const hit_record& rec, const sphere* light_shape, seed_t seed, scatter_record& srec) const;
 	__device__ float scattering_pdf(const float3& r_dir, const hit_record& rec, const ray& scattered) const;
 	float3 emitted(const ray& r_in, const hit_record& rec, const float3 &p) const;

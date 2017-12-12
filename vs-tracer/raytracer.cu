@@ -186,50 +186,51 @@ void simple_lambertians(hitable_list **scene, camera **cam, sphere **light_shape
 	*cam = new camera(make_float3(13, 2, 3), make_float3(0, 0, 0), make_float3(0, 1, 0), 20, aspect, 0.1f, 10.0f);
 }
 
-//void random_scene(hitable_list **scene, camera **cam, sphere **light_shape, float aspect)
-//{
-//    int n = 500;
-//	const sphere **list = new const sphere*[n + 1];
-//	const material **materials = new const material*[n + 1];
-//
-//	int i = 0;
-//	materials[i] = make_lambertian(make_float3(0.5, 0.5, 0.5));
-//    list[i++] = new sphere(make_float3(0,-1000,0), 1000, i);
-//    for (int a = -11; a < 11; a++) {
-//        for (int b = -11; b < 11; b++) {
-//            float choose_mat = drand48();
-//			float3 center = make_float3(a + 0.9*drand48(), 0.2, b + 0.9*drand48());
-//            if (length(center- make_float3(4,0.2,0)) > 0.9) {
-//                if (choose_mat < 0.8) {  // diffuse
-//					materials[i] = make_lambertian(make_float3(drand48()*drand48(), drand48()*drand48(), drand48()*drand48()));
-//                    list[i++] = new sphere(center, 0.2, i);
-//                }
-//                else if (choose_mat < 0.95) { // metal
-//					materials[i] = make_metal(make_float3(0.5*(1 + drand48()), 0.5*(1 + drand48()), 0.5*(1 + drand48())), 0.5*drand48());
-//                    list[i++] = new sphere(center, 0.2, i);
-//                }
-//                else {  // glass
-//					materials[i] = make_dielectric(1.5);
-//                    list[i++] = new sphere(center, 0.2, i);
-//                }
-//            }
-//        }
-//    }
-//
-//	materials[i] = make_dielectric(1.5);
-//    list[i++] = new sphere(make_float3(0, 1, 0), 1.0, i);
-//	materials[i] = make_lambertian(make_float3(0.4, 0.2, 0.1));
-//    list[i++] = new sphere(make_float3(-4, 1, 0), 1.0, i);
-//	materials[i] = make_metal(make_float3(0.7, 0.6, 0.5), 0.0);
-//    list[i++] = new sphere(make_float3(4, 1, 0), 1.0, i);
-//
-//	materials[i] = make_diffuse_light(make_float3(200, 200, 100));
-//	*light_shape = new sphere(make_float3(10, 10, 10), .5, i);
-//	list[i++] = *light_shape;
-//
-//	*scene = new hitable_list(list, i, materials, i);
-//	*cam = new camera(make_float3(13, 2, 3), make_float3(0, 0, 0), make_float3(0, 1, 0), 20, aspect, 0.1, 10.0);
-//}
+void random_scene(hitable_list **scene, camera **cam, sphere **light_shape, float aspect)
+{
+    int n = 500;
+	sphere *list = new sphere[n + 1];
+	material *materials = new material[n + 1];
+
+	int i = 0;
+	materials[i] = *make_lambertian(make_float3(0.5, 0.5, 0.5));
+    list[i++] = sphere(make_float3(0,-1000,0), 1000, i);
+    for (int a = -11; a < 11; a++) {
+        for (int b = -11; b < 11; b++) {
+            float choose_mat = drand48();
+			float3 center = make_float3(a + 0.9*drand48(), 0.2, b + 0.9*drand48());
+            if (length(center- make_float3(4,0.2,0)) > 0.9) {
+                if (choose_mat < 0.8) {  // diffuse
+					materials[i] = *make_lambertian(make_float3(drand48()*drand48(), drand48()*drand48(), drand48()*drand48()));
+                    list[i++] = sphere(center, 0.2, i);
+                }
+                else if (choose_mat < 0.95) { // metal
+					materials[i] = *make_metal(make_float3(0.5*(1 + drand48()), 0.5*(1 + drand48()), 0.5*(1 + drand48())), 0.5*drand48());
+                    list[i++] = sphere(center, 0.2, i);
+                }
+                else {  // glass
+					materials[i] = *make_dielectric(1.5);
+                    list[i++] = sphere(center, 0.2, i);
+                }
+            }
+        }
+    }
+
+	materials[i] = *make_dielectric(1.5);
+    list[i++] = sphere(make_float3(0, 1, 0), 1.0, i);
+	materials[i] = *make_lambertian(make_float3(0.4, 0.2, 0.1));
+    list[i++] = sphere(make_float3(-4, 1, 0), 1.0, i);
+	materials[i] = *make_metal(make_float3(0.7, 0.6, 0.5), 0.0);
+    list[i++] = sphere(make_float3(4, 1, 0), 1.0, i);
+
+	//materials[i] = *make_diffuse_light(make_float3(200, 200, 100));
+	//*light_shape = &sphere(make_float3(10, 10, 10), .5, i);
+	//list[i++] = light_shape;
+	light_shape = NULL;
+
+	*scene = new hitable_list(list, i, materials, i);
+	*cam = new camera(make_float3(13, 2, 3), make_float3(0, 0, 0), make_float3(0, 1, 0), 20, aspect, 0.1, 10.0);
+}
 
 /**
  * Host main routine
@@ -238,15 +239,15 @@ int main(int argc, char** argv)
 {
 	bool print_progress = false;
 	bool write_image = false;
-	bool show_window = true;
+	bool show_window = false;
 
 	const int nx = 600;
 	const int ny = 300;
-	const int ns = 100;
+	const int ns = 1000;
 	hitable_list *world;
 	camera *cam;
 	sphere *light_shape;
-	simple_lambertians(&world, &cam, &light_shape, float(nx) / float(ny));
+	random_scene(&world, &cam, &light_shape, float(nx) / float(ny));
 
 	const float theta = 1.221730f;
 	const float phi = 1.832596f;
