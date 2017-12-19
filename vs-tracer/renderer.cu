@@ -27,7 +27,7 @@ struct pixel_compare {
 
 	bool operator() (int p0, int p1)
 	{
-		return pixels[p0].samples < pixels[p1].samples;
+		return pixels[p0].done < pixels[p1].done;
 	}
 };
 
@@ -43,6 +43,9 @@ inline void renderer::generate_ray(int ray_idx, int x, int y)
 void renderer::prepare_kernel()
 {
 	const unsigned int num_pixels = nx*ny;
+
+	remaining_pixels = num_pixels;
+	next_pixel = 0;
 	
 	pixels = new pixel[num_pixels];
 	h_clrs = new clr_rec[num_pixels];
@@ -256,6 +259,8 @@ __global__ void simple_color(const ray* rays, const cu_hit* hits, clr_rec* clrs,
 	curand_init(0, seed*blockDim.x + threadIdx.x, 0, &localState);
 
 	scatter_record srec;
+	//const float3& emitted =  hit_mat->emitted(r, rec, rec.p);
+	//crec.color += crec.not_absorbed*emitted;
 	if (hit_mat.scatter(r.direction, rec, NULL, &localState, srec)) {
 		crec.origin = srec.scattered.origin;
 		crec.direction = srec.scattered.direction;
@@ -291,31 +296,6 @@ void renderer::run_kernel()
 }
 
 void renderer::compact_rays() {
-	unsigned int sampled = 0;
-	// first step only generate scattered rays and compact them
-	for (unsigned int i = 0; i < numpixels(); ++i)
-	{
-		unsigned int pixelId = samples[i].pixelId;
-		if (!color(i)) { // is ray no longer active ?
-			// cumulate its color
-			h_colors[pixelId] += samples[i].color;
-			++(pixels[pixelId].done);
-			//if (pixelId == DBG_IDX) printf("sample done\n");
-
-			// generate new ray
-			pixelId = pixel_idx[(sampled++) % numpixels()];
-			pixels[pixelId].samples++;
-			// then, generate a new sample
-			const unsigned int x = pixelId % nx;
-			const unsigned int y = ny - 1 - (pixelId / nx);
-			generate_ray(i, x, y);
-		}
-	}
-	std::sort(pixel_idx, pixel_idx + numpixels(), pixel_compare(pixels));
-	num_rays = (pixels[pixel_idx[0]].samples <= ns) ? numpixels() : 0;
-}
-
-void renderer::simple_compact_rays() {
 	clock_t start = clock();
 
 	unsigned int sampled = 0;
@@ -346,7 +326,48 @@ void renderer::simple_compact_rays() {
 		}
 	}
 	std::sort(pixel_idx, pixel_idx + numpixels(), pixel_compare(pixels));
-	num_rays = (pixels[pixel_idx[0]].samples <= ns) ? numpixels() : 0;
+	num_rays = (pixels[pixel_idx[0]].done < ns) ? numpixels() : 0;
+
+	compact += clock() - start;
+}
+
+void renderer::compact_rays_nosort() {
+	clock_t start = clock();
+
+	// first step only generate scattered rays and compact them
+	for (unsigned int i = 0; i < numpixels(); ++i) {
+		const clr_rec& crec = h_clrs[i];
+		sample& s = samples[i];
+		unsigned int pixelId = s.pixelId;
+		if (s.depth == max_depth || crec.done) { // ray no longer active ?
+			if (crec.done) // cumulate its color
+				h_colors[pixelId] += s.not_absorbed*crec.color;
+			++(pixels[pixelId].done);
+			//if (pixelId == DBG_IDX) printf("sample done\n");
+
+			if (pixels[pixelId].done == ns) {
+				--remaining_pixels;
+			}
+
+			// generate new ray
+			if (pixels[next_pixel].samples == ns) {
+				next_pixel = (next_pixel + 1) % numpixels();
+			}
+			pixels[next_pixel].samples++;
+			// then, generate a new sample
+			const unsigned int x = next_pixel % nx;
+			const unsigned int y = ny - 1 - (next_pixel / nx);
+			generate_ray(i, x, y);
+		}
+		else { // ray has been scattered
+			s.not_absorbed *= crec.color;
+			h_rays[i].origin = crec.origin;
+			h_rays[i].direction = crec.direction;
+			++s.depth;
+		}
+	}
+	//std::sort(pixel_idx, pixel_idx + numpixels(), pixel_compare(pixels));
+	num_rays = remaining_pixels > 0 ? numpixels() : 0;
 
 	compact += clock() - start;
 }

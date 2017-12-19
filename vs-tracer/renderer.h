@@ -14,7 +14,7 @@ struct pixel {
 	//TODO pixel should know it's coordinates and it's id should be a computed field
 	unsigned int id;
 	unsigned int samples;
-	unsigned int done;
+	unsigned int done; // needed to differentiate between done vs ongoing samples, when doing progressive rendering
 
 	pixel() { id = 0; samples = 0; }
 };
@@ -48,8 +48,7 @@ public:
 	void generate_rays();
 	void run_kernel();
 	void compact_rays();
-	//void simple_color();
-	void simple_compact_rays();
+	void compact_rays_nosort();
 
 	void destroy();
 
@@ -80,6 +79,8 @@ public:
 
 	unsigned int num_rays;
 private:
+	uint next_pixel = 0;
+	int remaining_pixels = 0;
 	uint num_runs = 0;
 	sphere *light_shape;
 	int* pixel_idx;

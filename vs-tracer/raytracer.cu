@@ -238,7 +238,7 @@ void random_scene(hitable_list **scene, camera **cam, sphere **light_shape, floa
 int main(int argc, char** argv)
 {
 	bool print_progress = false;
-	bool write_image = false;
+	bool write_image = true;
 	bool show_window = false;
 
 	const int nx = 600;
@@ -279,7 +279,7 @@ int main(int argc, char** argv)
 			// compute ray-world intersections
 			r.run_kernel();
 			// compact active rays
-			r.simple_compact_rays();
+			r.compact_rays();
 		} else if (rendering) {
 			rendering = false;
 			w->set_title("Voxel Tracer");
@@ -295,11 +295,11 @@ int main(int argc, char** argv)
 		}
 
 		++iteration;
-
 	}
 
     clock_t end = clock();
-	printf("rendering %d rays, duration %.2f seconds\nkernel %.2f seconds\ngenerate %.2f seconds\ncompact %.2f seconds\n",
+	printf("rendering %d iterations, %d rays, duration %.2f seconds\nkernel %.2f seconds\ngenerate %.2f seconds\ncompact %.2f seconds\n",
+		iteration,
 		total_rays,
 		double(end - begin) / CLOCKS_PER_SEC,
 		double(r.kernel) / CLOCKS_PER_SEC,

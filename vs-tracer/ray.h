@@ -16,16 +16,14 @@ struct ray {
 
 struct sample {
 	uint pixelId;
-	float3 color;
 	float3 not_absorbed;
 	uint depth;
 
 	sample() {}
 	sample(int pId): pixelId(pId) {
-		color = make_float3(0, 0, 0);
 		not_absorbed = make_float3(1, 1, 1);
 	}
-	sample(const sample& s) :pixelId(s.pixelId), color(s.color), not_absorbed(s.not_absorbed), depth(s.depth) {}
+	sample(const sample& s) :pixelId(s.pixelId), not_absorbed(s.not_absorbed), depth(s.depth) {}
 };
 
 struct clr_rec {
