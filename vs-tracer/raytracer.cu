@@ -237,13 +237,12 @@ void random_scene(hitable_list **scene, camera **cam, sphere **light_shape, floa
  */
 int main(int argc, char** argv)
 {
-	bool print_progress = false;
 	bool write_image = true;
 	bool show_window = false;
 
 	const int nx = 600;
 	const int ny = 300;
-	const int ns = 1000;
+	const int ns = 100;
 	hitable_list *world;
 	camera *cam;
 	sphere *light_shape;
@@ -266,15 +265,10 @@ int main(int argc, char** argv)
 	unsigned int iteration = 0;
 	unsigned int total_rays = 0;
 	bool rendering = true;
-	while ((show_window && !w->quit) || (!show_window && r.numrays() > 0))
+	while ((show_window && !w->quit) || (!show_window && r.is_not_done()))
 	{
-		if (r.numrays() > 0) {
-			total_rays += r.numrays();
-			if (print_progress && iteration % 100 == 0)
-			{
-				cout << "iteration " << iteration << "(" << r.numrays() << " rays)\r";
-				cout.flush();
-			}
+		if (r.is_not_done()) {
+			total_rays += r.numpixels();
 
 			// compute ray-world intersections
 			r.run_kernel();
@@ -288,7 +282,7 @@ int main(int argc, char** argv)
 		if (show_window) {
 			w->update_pixels();
 			w->poll_events();
-			if (!rendering && r.numrays() > 0) {
+			if (!rendering && !r.is_not_done()) {
 				rendering = true;
 				w->set_title("Voxel Tracer (rendering)");
 			}

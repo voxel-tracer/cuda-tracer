@@ -12,11 +12,11 @@ struct cu_hit {
 
 struct pixel {
 	//TODO pixel should know it's coordinates and it's id should be a computed field
-	unsigned int id;
-	unsigned int samples;
-	unsigned int done; // needed to differentiate between done vs ongoing samples, when doing progressive rendering
+	uint id;
+	uint samples;
+	uint done; // needed to differentiate between done vs ongoing samples, when doing progressive rendering
 
-	pixel() { id = 0; samples = 0; }
+	pixel(): id(0), samples(0), done(0) {}
 };
 
 class renderer {
@@ -33,7 +33,7 @@ public:
 	}
 
 	unsigned int numpixels() const { return nx*ny; }
-	unsigned int numrays() const { return num_rays; }
+	bool is_not_done() const { return not_done != 0; }
 	unsigned int get_pixelId(int x, int y) const { return (ny - y - 1)*nx + x; }
 	float3 get_pixel_color(int x, int y) const {
 		const unsigned int pixelId = get_pixelId(x, y);
@@ -48,7 +48,6 @@ public:
 	void generate_rays();
 	void run_kernel();
 	void compact_rays();
-	void compact_rays_nosort();
 
 	void destroy();
 
@@ -77,8 +76,8 @@ public:
 	clock_t generate = 0;
 	clock_t compact = 0;
 
-	unsigned int num_rays;
 private:
+	uint not_done = 0;
 	uint next_pixel = 0;
 	int remaining_pixels = 0;
 	uint num_runs = 0;

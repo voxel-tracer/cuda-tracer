@@ -23,10 +23,9 @@ void err(cudaError_t err, char *msg)
 
 struct pixel_compare {
 	const pixel* pixels;
-	pixel_compare(pixel* _pixels) { pixels = _pixels; }
+	pixel_compare(const pixel* _pixels): pixels(_pixels) {}
 
-	bool operator() (int p0, int p1)
-	{
+	bool operator() (int p0, int p1) {
 		return pixels[p0].done < pixels[p1].done;
 	}
 };
@@ -85,7 +84,8 @@ void renderer::prepare_kernel()
 	generate_rays();
 	//generate += clock() - start;
 
-	num_rays = num_pixels;
+	//num_rays = num_pixels;
+	not_done = 1;
 }
 
 void renderer::update_camera()
@@ -105,8 +105,8 @@ void renderer::update_camera()
 	//clock_t start = clock();
 	generate_rays();
 	//generate += clock() - start;
-	num_rays = num_pixels;
-
+	//num_rays = num_pixels;
+	not_done = 1;
 	num_runs = 0;
 }
 
@@ -276,20 +276,20 @@ void renderer::run_kernel()
 {
 	cudaProfilerStart();
 	clock_t start = clock();
-
+	
 	// copying rays to device
-	err(cudaMemcpy(d_rays, h_rays, num_rays * sizeof(ray), cudaMemcpyHostToDevice), "copy rays from host to device");
+	err(cudaMemcpy(d_rays, h_rays, numpixels() * sizeof(ray), cudaMemcpyHostToDevice), "copy rays from host to device");
 
 	// Launch the CUDA Kernel
 	int threadsPerBlock = 128;
-	int blocksPerGrid = (num_rays + threadsPerBlock - 1) / threadsPerBlock;
-	hit_scene << <blocksPerGrid, threadsPerBlock >> >(d_rays, num_rays, d_scene, world->list_size, 0.1f, FLT_MAX, d_hits);
+	int blocksPerGrid = (numpixels() + threadsPerBlock - 1) / threadsPerBlock;
+	hit_scene << <blocksPerGrid, threadsPerBlock >> >(d_rays, numpixels(), d_scene, world->list_size, 0.1f, FLT_MAX, d_hits);
 	err(cudaGetLastError(), "launch hit_scene kernel");
-	simple_color << <blocksPerGrid, threadsPerBlock >> >(d_rays, d_hits, d_clrs, num_runs++, num_rays, d_scene, world->list_size, d_materials, world->material_size, max_depth);
+	simple_color << <blocksPerGrid, threadsPerBlock >> >(d_rays, d_hits, d_clrs, num_runs++, numpixels(), d_scene, world->list_size, d_materials, world->material_size, max_depth);
 	err(cudaGetLastError(), "launch simple_color kernel");
 
 	// Copy the results to host
-	err(cudaMemcpy(h_clrs, d_clrs, num_rays * sizeof(clr_rec), cudaMemcpyDeviceToHost), "copy results from device to host");
+	err(cudaMemcpy(h_clrs, d_clrs, numpixels() * sizeof(clr_rec), cudaMemcpyDeviceToHost), "copy results from device to host");
 
 	kernel += clock() - start;
 	cudaProfilerStop();
@@ -326,51 +326,51 @@ void renderer::compact_rays() {
 		}
 	}
 	std::sort(pixel_idx, pixel_idx + numpixels(), pixel_compare(pixels));
-	num_rays = (pixels[pixel_idx[0]].done < ns) ? numpixels() : 0;
+	not_done = pixels[pixel_idx[0]].done < ns;
 
 	compact += clock() - start;
 }
-
-void renderer::compact_rays_nosort() {
-	clock_t start = clock();
-
-	// first step only generate scattered rays and compact them
-	for (unsigned int i = 0; i < numpixels(); ++i) {
-		const clr_rec& crec = h_clrs[i];
-		sample& s = samples[i];
-		unsigned int pixelId = s.pixelId;
-		if (s.depth == max_depth || crec.done) { // ray no longer active ?
-			if (crec.done) // cumulate its color
-				h_colors[pixelId] += s.not_absorbed*crec.color;
-			++(pixels[pixelId].done);
-			//if (pixelId == DBG_IDX) printf("sample done\n");
-
-			if (pixels[pixelId].done == ns) {
-				--remaining_pixels;
-			}
-
-			// generate new ray
-			if (pixels[next_pixel].samples == ns) {
-				next_pixel = (next_pixel + 1) % numpixels();
-			}
-			pixels[next_pixel].samples++;
-			// then, generate a new sample
-			const unsigned int x = next_pixel % nx;
-			const unsigned int y = ny - 1 - (next_pixel / nx);
-			generate_ray(i, x, y);
-		}
-		else { // ray has been scattered
-			s.not_absorbed *= crec.color;
-			h_rays[i].origin = crec.origin;
-			h_rays[i].direction = crec.direction;
-			++s.depth;
-		}
-	}
-	//std::sort(pixel_idx, pixel_idx + numpixels(), pixel_compare(pixels));
-	num_rays = remaining_pixels > 0 ? numpixels() : 0;
-
-	compact += clock() - start;
-}
+//
+//void renderer::compact_rays_nosort() {
+//	clock_t start = clock();
+//
+//	// first step only generate scattered rays and compact them
+//	for (unsigned int i = 0; i < numpixels(); ++i) {
+//		const clr_rec& crec = h_clrs[i];
+//		sample& s = samples[i];
+//		unsigned int pixelId = s.pixelId;
+//		if (s.depth == max_depth || crec.done) { // ray no longer active ?
+//			if (crec.done) // cumulate its color
+//				h_colors[pixelId] += s.not_absorbed*crec.color;
+//			++(pixels[pixelId].done);
+//			//if (pixelId == DBG_IDX) printf("sample done\n");
+//
+//			if (pixels[pixelId].done == ns) {
+//				--remaining_pixels;
+//			}
+//
+//			// generate new ray
+//			if (pixels[next_pixel].samples == ns) {
+//				next_pixel = (next_pixel + 1) % numpixels();
+//			}
+//			pixels[next_pixel].samples++;
+//			// then, generate a new sample
+//			const unsigned int x = next_pixel % nx;
+//			const unsigned int y = ny - 1 - (next_pixel / nx);
+//			generate_ray(i, x, y);
+//		}
+//		else { // ray has been scattered
+//			s.not_absorbed *= crec.color;
+//			h_rays[i].origin = crec.origin;
+//			h_rays[i].direction = crec.direction;
+//			++s.depth;
+//		}
+//	}
+//	//std::sort(pixel_idx, pixel_idx + numpixels(), pixel_compare(pixels));
+//	//num_rays = remaining_pixels > 0 ? numpixels() : 0;
+//
+//	compact += clock() - start;
+//}
 
 void renderer::destroy() {
 	// Free device global memory
