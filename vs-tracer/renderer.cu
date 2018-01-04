@@ -23,10 +23,19 @@ void err(cudaError_t err, char *msg)
 
 struct pixel_compare {
 	const pixel* pixels;
-	pixel_compare(const pixel* _pixels): pixels(_pixels) {}
+	const uint ns;
+	pixel_compare(const pixel* _pixels, uint _ns): pixels(_pixels), ns(_ns) {}
 
 	bool operator() (int p0, int p1) {
-		return pixels[p0].done < pixels[p1].done;
+		const uint s0 = pixels[p0].samples;
+		const uint s1 = pixels[p1].samples;
+		if (s1 >= ns) return true;
+		else if (s0 >= ns) return false;
+
+		const uint d0 = pixels[p0].done;
+		const uint d1 = pixels[p1].done;
+		if (d0 == d1) return s0 < s1;
+		return d0 < d1;
 	}
 };
 
@@ -84,8 +93,7 @@ void renderer::prepare_kernel()
 	generate_rays();
 	//generate += clock() - start;
 
-	//num_rays = num_pixels;
-	not_done = 1;
+	wunit = new work_unit(0, numpixels());
 }
 
 void renderer::update_camera()
@@ -105,8 +113,6 @@ void renderer::update_camera()
 	//clock_t start = clock();
 	generate_rays();
 	//generate += clock() - start;
-	//num_rays = num_pixels;
-	not_done = 1;
 	num_runs = 0;
 }
 
@@ -272,62 +278,80 @@ __global__ void simple_color(const ray* rays, const cu_hit* hits, clr_rec* clrs,
 	}
 }
 
-void renderer::run_kernel()
-{
+void renderer::copy_rays_to_gpu(const work_unit* wu) {
+	err(cudaMemcpy(d_rays, h_rays + wu->start_idx, wu->length() * sizeof(ray), cudaMemcpyHostToDevice), "copy rays from host to device");
+}
+
+void renderer::copy_colors_from_gpu(const work_unit* wu) {
+	err(cudaMemcpy(h_clrs + wu->start_idx, d_clrs, wu->length() * sizeof(clr_rec), cudaMemcpyDeviceToHost), "copy results from device to host");
+}
+
+void renderer::start_kernel(const work_unit* wu) {
+	int threadsPerBlock = 128;
+	int blocksPerGrid = (wu->length() + threadsPerBlock - 1) / threadsPerBlock;
+	hit_scene << <blocksPerGrid, threadsPerBlock >> >(d_rays, wu->length(), d_scene, world->list_size, 0.1f, FLT_MAX, d_hits);
+	err(cudaGetLastError(), "launch hit_scene kernel");
+	simple_color << <blocksPerGrid, threadsPerBlock >> >(d_rays, d_hits, d_clrs, num_runs++, wu->length(), d_scene, world->list_size, d_materials, world->material_size, max_depth);
+	err(cudaGetLastError(), "launch simple_color kernel");
+}
+
+void renderer::run_kernel() {
 	cudaProfilerStart();
 	clock_t start = clock();
 	
-	// copying rays to device
-	err(cudaMemcpy(d_rays, h_rays, numpixels() * sizeof(ray), cudaMemcpyHostToDevice), "copy rays from host to device");
-
-	// Launch the CUDA Kernel
-	int threadsPerBlock = 128;
-	int blocksPerGrid = (numpixels() + threadsPerBlock - 1) / threadsPerBlock;
-	hit_scene << <blocksPerGrid, threadsPerBlock >> >(d_rays, numpixels(), d_scene, world->list_size, 0.1f, FLT_MAX, d_hits);
-	err(cudaGetLastError(), "launch hit_scene kernel");
-	simple_color << <blocksPerGrid, threadsPerBlock >> >(d_rays, d_hits, d_clrs, num_runs++, numpixels(), d_scene, world->list_size, d_materials, world->material_size, max_depth);
-	err(cudaGetLastError(), "launch simple_color kernel");
-
-	// Copy the results to host
-	err(cudaMemcpy(h_clrs, d_clrs, numpixels() * sizeof(clr_rec), cudaMemcpyDeviceToHost), "copy results from device to host");
+	copy_rays_to_gpu(wunit);
+	start_kernel(wunit);
+	copy_colors_from_gpu(wunit);
 
 	kernel += clock() - start;
 	cudaProfilerStop();
+
+	compact_rays(wunit);
 }
 
-void renderer::compact_rays() {
+void renderer::compact_rays(work_unit* wu) {
 	clock_t start = clock();
 
-	unsigned int sampled = 0;
-	// first step only generate scattered rays and compact them
-	for (unsigned int i = 0; i < numpixels(); ++i)
-	{
+	uint done_samples = 0;
+	bool not_done = false;
+	for (uint i = 0; i < wu->length(); ++i) {
+		const uint sId = wu->start_idx + i;
 		const clr_rec& crec = h_clrs[i];
-		sample& s = samples[i];
-		unsigned int pixelId = s.pixelId;
-		if (s.depth == max_depth || crec.done) { // ray no longer active ?
-			if (crec.done) // cumulate its color
-				h_colors[pixelId] += s.not_absorbed*crec.color;
+		sample& s = samples[sId];
+		const uint pixelId = s.pixelId;
+		s.done = crec.done || s.depth == max_depth;
+		if (s.done) {
+			if (crec.done) h_colors[pixelId] += s.not_absorbed*crec.color;
 			++(pixels[pixelId].done);
-			//if (pixelId == DBG_IDX) printf("sample done\n");
-
-			// generate new ray
-			pixelId = pixel_idx[(sampled++) % numpixels()];
-			pixels[pixelId].samples++;
-			// then, generate a new sample
-			const unsigned int x = pixelId % nx;
-			const unsigned int y = ny - 1 - (pixelId / nx);
-			generate_ray(i, x, y);
-		} else { // ray has been scattered
+			++done_samples;
+		} else {
 			s.not_absorbed *= crec.color;
-			h_rays[i].origin = crec.origin;
-			h_rays[i].direction = crec.direction;
+			h_rays[sId].origin = crec.origin;
+			h_rays[sId].direction = crec.direction;
 			++s.depth;
 		}
+		not_done = not_done || (pixels[pixelId].done < ns);
 	}
-	std::sort(pixel_idx, pixel_idx + numpixels(), pixel_compare(pixels));
-	not_done = pixels[pixel_idx[0]].done < ns;
 
+	if (done_samples > 0 && not_done) {
+		std::sort(pixel_idx + wu->start_idx, pixel_idx + wu->end_idx, pixel_compare(pixels, ns));
+		uint sampled = wu->start_idx;
+		for (uint i = 0; i < wu->length(); ++i) {
+			const uint sId = wu->start_idx + i;
+			sample& s = samples[sId];
+			if (s.done) {
+				// generate new ray
+				const uint pixelId = pixel_idx[sampled++];
+				pixels[pixelId].samples++;
+				// then, generate a new sample
+				const unsigned int x = pixelId % nx;
+				const unsigned int y = ny - 1 - (pixelId / nx);
+				generate_ray(i, x, y);
+			}
+		}
+	}
+
+	wu->done = !not_done;
 	compact += clock() - start;
 }
 //
@@ -383,4 +407,5 @@ void renderer::destroy() {
 	// Free host memory
 	delete[] samples;
 	delete[] h_clrs;
+	delete wunit;
 }

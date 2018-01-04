@@ -19,6 +19,16 @@ struct pixel {
 	pixel(): id(0), samples(0), done(0) {}
 };
 
+struct work_unit {
+	const uint start_idx;
+	const uint end_idx;
+	bool compact;
+	bool done;
+
+	work_unit(uint start, uint end) :start_idx(start), end_idx(end), compact(false), done(false) {}
+	uint length() const { return end_idx - start_idx; }
+};
+
 class renderer {
 public:
 	renderer(camera* _cam, hitable_list* w, sphere *ls, unsigned int _nx, unsigned int _ny, unsigned int _ns, unsigned int _max_depth, float _min_attenuation) { 
@@ -33,7 +43,7 @@ public:
 	}
 
 	unsigned int numpixels() const { return nx*ny; }
-	bool is_not_done() const { return not_done != 0; }
+	bool is_not_done() const { return !(wunit->done); }
 	unsigned int get_pixelId(int x, int y) const { return (ny - y - 1)*nx + x; }
 	float3 get_pixel_color(int x, int y) const {
 		const unsigned int pixelId = get_pixelId(x, y);
@@ -47,7 +57,10 @@ public:
 	bool color(int ray_idx);
 	void generate_rays();
 	void run_kernel();
-	void compact_rays();
+	void copy_rays_to_gpu(const work_unit* wu);
+	void start_kernel(const work_unit* wu);
+	void copy_colors_from_gpu(const work_unit* wu);
+	void compact_rays(work_unit* wu);
 
 	void destroy();
 
@@ -77,7 +90,7 @@ public:
 	clock_t compact = 0;
 
 private:
-	uint not_done = 0;
+	work_unit *wunit;
 	uint next_pixel = 0;
 	int remaining_pixels = 0;
 	uint num_runs = 0;
