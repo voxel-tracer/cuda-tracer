@@ -18,12 +18,13 @@ struct sample {
 	uint pixelId;
 	float3 not_absorbed;
 	uint depth;
+	bool done;
 
 	sample() {}
-	sample(int pId): pixelId(pId) {
+	sample(int pId): pixelId(pId), depth(0), done(false) {
 		not_absorbed = make_float3(1, 1, 1);
 	}
-	sample(const sample& s) :pixelId(s.pixelId), not_absorbed(s.not_absorbed), depth(s.depth) {}
+	sample(const sample& s) :pixelId(s.pixelId), not_absorbed(s.not_absorbed), depth(s.depth), done(s.done) {}
 };
 
 struct clr_rec {
