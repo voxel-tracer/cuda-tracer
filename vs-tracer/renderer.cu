@@ -48,19 +48,19 @@ inline void renderer::generate_ray(int ray_idx, int x, int y)
 	samples[ray_idx] = sample((ny - y - 1)*nx + x);
 }
 
-void renderer::prepare_kernel()
-{
+void renderer::prepare_kernel() {
 	const unsigned int num_pixels = nx*ny;
+	const uint half_numpixels = num_pixels / 2;
 
 	remaining_pixels = num_pixels;
 	next_pixel = 0;
 	
 	pixels = new pixel[num_pixels];
-	h_clrs = new clr_rec[num_pixels];
+	h_clrs = new clr_rec[half_numpixels];
 	samples = new sample[num_pixels];
 	h_rays = new ray[num_pixels];
 	h_colors = new float3[num_pixels];
-	pixel_idx = new int[num_pixels];
+	pixel_idx = new int[half_numpixels];
 	
 	// allocate device memory for input
     d_scene = NULL;
@@ -69,31 +69,30 @@ void renderer::prepare_kernel()
 	err(cudaMalloc((void **)&d_materials, world->material_size * sizeof(material)), "allocate device d_materials");
 
     d_rays = NULL;
-	err(cudaMalloc((void **)&d_rays, num_pixels * sizeof(ray)), "allocate device d_rays");
+	err(cudaMalloc((void **)&d_rays, half_numpixels * sizeof(ray)), "allocate device d_rays");
 
     d_hits = NULL;
-	err(cudaMalloc((void **)&d_hits, num_pixels * sizeof(cu_hit)), "allocate device d_hits");
+	err(cudaMalloc((void **)&d_hits, half_numpixels * sizeof(cu_hit)), "allocate device d_hits");
 
 	d_clrs = NULL;
-	err(cudaMalloc((void **)&d_clrs, num_pixels * sizeof(clr_rec)), "allocate device d_clrs");
+	err(cudaMalloc((void **)&d_clrs, half_numpixels * sizeof(clr_rec)), "allocate device d_clrs");
 
     // Copy the host input in host memory to the device input in device memory
 	err(cudaMemcpy(d_scene, world->list, world->list_size * sizeof(sphere), cudaMemcpyHostToDevice), "copy scene from host to device");
 	err(cudaMemcpy(d_materials, world->materials, world->material_size * sizeof(material), cudaMemcpyHostToDevice), "copy materials from host to device");
 
 	// set temporary variables
-	for (unsigned int i = 0; i < num_pixels; i++)
-	{
+	for (unsigned int i = 0; i < num_pixels; i++) {
 		pixels[i].id = i;
 		pixels[i].samples = 1;
-		pixel_idx[i] = i;
 	}
 
 	//clock_t start = clock();
 	generate_rays();
 	//generate += clock() - start;
 
-	wunit = new work_unit(0, numpixels());
+	wunitA = new work_unit(0, half_numpixels);
+	wunitB = new work_unit(half_numpixels, num_pixels);
 }
 
 void renderer::update_camera()
@@ -107,7 +106,6 @@ void renderer::update_camera()
 		pixels[i].id = i;
 		pixels[i].samples = 1;
 		pixels[i].done = 0;
-		pixel_idx[i] = i;
 	}
 
 	//clock_t start = clock();
@@ -116,8 +114,7 @@ void renderer::update_camera()
 	num_runs = 0;
 }
 
-void renderer::generate_rays()
-{
+void renderer::generate_rays() {
 	unsigned int ray_idx = 0;
 	for (int j = ny - 1; j >= 0; j--)
 		for (int i = 0; i < nx; ++i, ++ray_idx)
@@ -194,11 +191,10 @@ bool renderer::color(int ray_idx) {
 //		}
 //	}
 //}
-__global__ void hit_scene(const ray* rays, const unsigned int num_rays, const sphere* scene, const unsigned int scene_size, float t_min, float t_max, cu_hit* hits)
+__global__ void hit_scene(const ray* rays, const uint num_rays, const sphere* scene, const unsigned int scene_size, float t_min, float t_max, cu_hit* hits)
 {
 	int i = blockDim.x * blockIdx.x + threadIdx.x;
-	if (i >= num_rays)
-		return;
+	if (i >= num_rays) return;
 
 	const ray *r = &(rays[i]);
 	const float3 ro = r->origin;
@@ -239,10 +235,9 @@ __global__ void hit_scene(const ray* rays, const unsigned int num_rays, const sp
 	hits[i].hit_idx = hit_idx;
 }
 
-__global__ void simple_color(const ray* rays, const cu_hit* hits, clr_rec* clrs, const uint seed, const int num_rays, const sphere* spheres, const int num_spheres, const material* materials, const int num_materials, const int max_depth) {
+__global__ void simple_color(const ray* rays, const cu_hit* hits, clr_rec* clrs, const uint seed, const uint num_rays, const sphere* spheres, const int num_spheres, const material* materials, const int num_materials, const int max_depth) {
 	const int ray_idx = blockDim.x * blockIdx.x + threadIdx.x;
-	if (ray_idx >= num_rays)
-		return;
+	if (ray_idx >= num_rays) return;
 
 	const ray& r = rays[ray_idx];
 	const cu_hit& hit = hits[ray_idx];
@@ -283,7 +278,7 @@ void renderer::copy_rays_to_gpu(const work_unit* wu) {
 }
 
 void renderer::copy_colors_from_gpu(const work_unit* wu) {
-	err(cudaMemcpy(h_clrs + wu->start_idx, d_clrs, wu->length() * sizeof(clr_rec), cudaMemcpyDeviceToHost), "copy results from device to host");
+	err(cudaMemcpy(h_clrs, d_clrs, wu->length() * sizeof(clr_rec), cudaMemcpyDeviceToHost), "copy results from device to host");
 }
 
 void renderer::start_kernel(const work_unit* wu) {
@@ -296,17 +291,24 @@ void renderer::start_kernel(const work_unit* wu) {
 }
 
 void renderer::run_kernel() {
+	run_kernel(wunitA);
+	run_kernel(wunitB);
+}
+
+void renderer::run_kernel(work_unit* wu) {
+	if (wu->done) return;
+
 	cudaProfilerStart();
 	clock_t start = clock();
-	
-	copy_rays_to_gpu(wunit);
-	start_kernel(wunit);
-	copy_colors_from_gpu(wunit);
+
+	copy_rays_to_gpu(wu);
+	start_kernel(wu);
+	copy_colors_from_gpu(wu);
 
 	kernel += clock() - start;
 	cudaProfilerStop();
 
-	compact_rays(wunit);
+	compact_rays(wu);
 }
 
 void renderer::compact_rays(work_unit* wu) {
@@ -334,8 +336,10 @@ void renderer::compact_rays(work_unit* wu) {
 	}
 
 	if (done_samples > 0 && not_done) {
-		std::sort(pixel_idx + wu->start_idx, pixel_idx + wu->end_idx, pixel_compare(pixels, ns));
-		uint sampled = wu->start_idx;
+		// sort uint ray [wu->start_idx, wu->end_idx[
+		for (uint i = 0; i < wu->length(); ++i) pixel_idx[i] = wu->start_idx + i;
+		std::sort(pixel_idx, pixel_idx + wu->length(), pixel_compare(pixels, ns));
+		uint sampled = 0;
 		for (uint i = 0; i < wu->length(); ++i) {
 			const uint sId = wu->start_idx + i;
 			sample& s = samples[sId];
@@ -346,7 +350,7 @@ void renderer::compact_rays(work_unit* wu) {
 				// then, generate a new sample
 				const unsigned int x = pixelId % nx;
 				const unsigned int y = ny - 1 - (pixelId / nx);
-				generate_ray(i, x, y);
+				generate_ray(sId, x, y);
 			}
 		}
 	}
@@ -407,5 +411,6 @@ void renderer::destroy() {
 	// Free host memory
 	delete[] samples;
 	delete[] h_clrs;
-	delete wunit;
+	delete wunitA;
+	delete wunitB;
 }

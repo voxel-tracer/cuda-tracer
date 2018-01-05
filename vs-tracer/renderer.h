@@ -43,7 +43,7 @@ public:
 	}
 
 	unsigned int numpixels() const { return nx*ny; }
-	bool is_not_done() const { return !(wunit->done); }
+	bool is_not_done() const { return !(wunitA->done && wunitB->done); }
 	unsigned int get_pixelId(int x, int y) const { return (ny - y - 1)*nx + x; }
 	float3 get_pixel_color(int x, int y) const {
 		const unsigned int pixelId = get_pixelId(x, y);
@@ -57,6 +57,7 @@ public:
 	bool color(int ray_idx);
 	void generate_rays();
 	void run_kernel();
+	void run_kernel(work_unit* wu);
 	void copy_rays_to_gpu(const work_unit* wu);
 	void start_kernel(const work_unit* wu);
 	void copy_colors_from_gpu(const work_unit* wu);
@@ -90,7 +91,8 @@ public:
 	clock_t compact = 0;
 
 private:
-	work_unit *wunit;
+	work_unit *wunitA;
+	work_unit *wunitB;
 	uint next_pixel = 0;
 	int remaining_pixels = 0;
 	uint num_runs = 0;
