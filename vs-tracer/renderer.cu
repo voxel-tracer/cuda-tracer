@@ -108,6 +108,12 @@ void renderer::update_camera()
 		pixels[i].done = 0;
 	}
 
+	for (uint i = 0; i < 2; i++)
+	{
+		wunits[i]->compact = false;
+		wunits[i]->done = false;
+	}
+
 	generate_rays();
 	num_runs = 0;
 }
