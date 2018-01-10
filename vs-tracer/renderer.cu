@@ -40,28 +40,25 @@ struct pixel_compare {
 };
 
 
-inline void renderer::generate_ray(int ray_idx, int x, int y)
-{
-	float u = float(x + drand48()) / float(nx);
-	float v = float(y + drand48()) / float(ny);
-	cam->get_ray(u, v, h_rays[ray_idx]);
-	samples[ray_idx] = sample((ny - y - 1)*nx + x);
-}
-
 void renderer::prepare_kernel() {
 	const unsigned int num_pixels = nx*ny;
 	const uint half_numpixels = num_pixels / 2;
 
 	remaining_pixels = num_pixels;
 	next_pixel = 0;
+	total_rays = 0;
 	
 	pixels = new pixel[num_pixels];
-	h_clrs = new clr_rec[half_numpixels];
 	samples = new sample[num_pixels];
-	h_rays = new ray[num_pixels];
 	h_colors = new float3[num_pixels];
 	pixel_idx = new int[half_numpixels];
-	
+
+	h_rays = new ray*[2];
+	cudaMallocHost(&h_rays[0], half_numpixels * sizeof(ray));
+	cudaMallocHost(&h_rays[1], half_numpixels * sizeof(ray));
+
+	cudaMallocHost(&h_clrs, half_numpixels * sizeof(clr_rec));
+
 	// allocate device memory for input
     d_scene = NULL;
 	err(cudaMalloc((void **)&d_scene, world->list_size * sizeof(sphere)), "allocate device d_scene");
@@ -87,12 +84,15 @@ void renderer::prepare_kernel() {
 		pixels[i].samples = 1;
 	}
 
+	wunits = new work_unit*[2];
+	wunits[0] = new work_unit(0, half_numpixels, h_rays[0]);
+	wunits[1] = new work_unit(half_numpixels, num_pixels, h_rays[1]);
+
 	//clock_t start = clock();
 	generate_rays();
 	//generate += clock() - start;
 
-	wunitA = new work_unit(0, half_numpixels);
-	wunitB = new work_unit(half_numpixels, num_pixels);
+	err(cudaStreamCreate(&stream), "cuda stream create");
 }
 
 void renderer::update_camera()
@@ -108,17 +108,25 @@ void renderer::update_camera()
 		pixels[i].done = 0;
 	}
 
-	//clock_t start = clock();
 	generate_rays();
-	//generate += clock() - start;
 	num_runs = 0;
 }
 
 void renderer::generate_rays() {
-	unsigned int ray_idx = 0;
+	const uint half_pixels = numpixels() / 2;
+	uint ray_idx = 0;
 	for (int j = ny - 1; j >= 0; j--)
-		for (int i = 0; i < nx; ++i, ++ray_idx)
-			generate_ray(ray_idx, i, j);
+		for (int i = 0; i < nx; ++i, ++ray_idx) {
+			uint unit = ray_idx / half_pixels;
+			generate_ray(wunits[unit], ray_idx%half_pixels, i, j);
+		}
+}
+
+inline void renderer::generate_ray(work_unit* wu, int ray_idx, int x, int y) {
+	float u = float(x + drand48()) / float(nx);
+	float v = float(y + drand48()) / float(ny);
+	cam->get_ray(u, v, wu->rays[ray_idx]);
+	samples[wu->start_idx + ray_idx] = sample((ny - y - 1)*nx + x);
 }
 
 bool renderer::color(int ray_idx) {
@@ -274,46 +282,61 @@ __global__ void simple_color(const ray* rays, const cu_hit* hits, clr_rec* clrs,
 }
 
 void renderer::copy_rays_to_gpu(const work_unit* wu) {
-	err(cudaMemcpy(d_rays, h_rays + wu->start_idx, wu->length() * sizeof(ray), cudaMemcpyHostToDevice), "copy rays from host to device");
+	err(cudaMemcpyAsync(d_rays, wu->rays, wu->length() * sizeof(ray), cudaMemcpyHostToDevice, stream), "copy rays from host to device");
 }
 
 void renderer::copy_colors_from_gpu(const work_unit* wu) {
-	err(cudaMemcpy(h_clrs, d_clrs, wu->length() * sizeof(clr_rec), cudaMemcpyDeviceToHost), "copy results from device to host");
+	err(cudaMemcpyAsync(h_clrs, d_clrs, wu->length() * sizeof(clr_rec), cudaMemcpyDeviceToHost, stream), "copy results from device to host");
 }
 
 void renderer::start_kernel(const work_unit* wu) {
 	int threadsPerBlock = 128;
 	int blocksPerGrid = (wu->length() + threadsPerBlock - 1) / threadsPerBlock;
-	hit_scene << <blocksPerGrid, threadsPerBlock >> >(d_rays, wu->length(), d_scene, world->list_size, 0.1f, FLT_MAX, d_hits);
-	err(cudaGetLastError(), "launch hit_scene kernel");
-	simple_color << <blocksPerGrid, threadsPerBlock >> >(d_rays, d_hits, d_clrs, num_runs++, wu->length(), d_scene, world->list_size, d_materials, world->material_size, max_depth);
-	err(cudaGetLastError(), "launch simple_color kernel");
+	hit_scene <<<blocksPerGrid, threadsPerBlock, 0, stream >>>(d_rays, wu->length(), d_scene, world->list_size, 0.1f, FLT_MAX, d_hits);
+	//err(cudaGetLastError(), "launch hit_scene kernel");
+	simple_color <<<blocksPerGrid, threadsPerBlock, 0, stream >>>(d_rays, d_hits, d_clrs, num_runs++, wu->length(), d_scene, world->list_size, d_materials, world->material_size, max_depth);
+	//err(cudaGetLastError(), "launch simple_color kernel");
 }
 
-void renderer::run_kernel() {
-	run_kernel(wunitA);
-	run_kernel(wunitB);
+void renderer::render() {
+	//run_kernel(wunitA);
+	//run_kernel(wunitB);
+	render_cycle(wunits[0], wunits[1]);
+
+	// swap work units
+	work_unit* tmp = wunits[0];
+	wunits[0] = wunits[1];
+	wunits[1] = tmp;
 }
 
-void renderer::run_kernel(work_unit* wu) {
-	if (wu->done) return;
+void renderer::render_cycle(work_unit* wu1, work_unit* wu2) {
 
-	cudaProfilerStart();
-	clock_t start = clock();
+	if (!wu1->done) {
+		clock_t start = clock();
+		copy_rays_to_gpu(wu1);
+		start_kernel(wu1);
+		copy_colors_from_gpu(wu1);
+		cudaStreamQuery(stream); // flush stream to start the kernel
+		wu1->compact = true;
+		total_rays += wu1->length();
+		kernel += clock() - start;
+	}
 
-	copy_rays_to_gpu(wu);
-	start_kernel(wu);
-	copy_colors_from_gpu(wu);
+	if (wu2->compact) {
+		clock_t start = clock();
+		compact_rays(wu2);
+		wu2->compact = false;
+		compact += clock() - start;
+	}
 
-	kernel += clock() - start;
-	cudaProfilerStop();
-
-	compact_rays(wu);
+	if (!wu1->done) {
+		clock_t start = clock();
+		cudaStreamSynchronize(stream);
+		kernel += clock() - start;
+	}
 }
 
 void renderer::compact_rays(work_unit* wu) {
-	clock_t start = clock();
-
 	uint done_samples = 0;
 	bool not_done = false;
 	for (uint i = 0; i < wu->length(); ++i) {
@@ -328,8 +351,8 @@ void renderer::compact_rays(work_unit* wu) {
 			++done_samples;
 		} else {
 			s.not_absorbed *= crec.color;
-			h_rays[sId].origin = crec.origin;
-			h_rays[sId].direction = crec.direction;
+			wu->rays[i].origin = crec.origin;
+			wu->rays[i].direction = crec.direction;
 			++s.depth;
 		}
 		not_done = not_done || (pixels[pixelId].done < ns);
@@ -350,55 +373,13 @@ void renderer::compact_rays(work_unit* wu) {
 				// then, generate a new sample
 				const unsigned int x = pixelId % nx;
 				const unsigned int y = ny - 1 - (pixelId / nx);
-				generate_ray(sId, x, y);
+				generate_ray(wu, i, x, y);
 			}
 		}
 	}
 
 	wu->done = !not_done;
-	compact += clock() - start;
 }
-//
-//void renderer::compact_rays_nosort() {
-//	clock_t start = clock();
-//
-//	// first step only generate scattered rays and compact them
-//	for (unsigned int i = 0; i < numpixels(); ++i) {
-//		const clr_rec& crec = h_clrs[i];
-//		sample& s = samples[i];
-//		unsigned int pixelId = s.pixelId;
-//		if (s.depth == max_depth || crec.done) { // ray no longer active ?
-//			if (crec.done) // cumulate its color
-//				h_colors[pixelId] += s.not_absorbed*crec.color;
-//			++(pixels[pixelId].done);
-//			//if (pixelId == DBG_IDX) printf("sample done\n");
-//
-//			if (pixels[pixelId].done == ns) {
-//				--remaining_pixels;
-//			}
-//
-//			// generate new ray
-//			if (pixels[next_pixel].samples == ns) {
-//				next_pixel = (next_pixel + 1) % numpixels();
-//			}
-//			pixels[next_pixel].samples++;
-//			// then, generate a new sample
-//			const unsigned int x = next_pixel % nx;
-//			const unsigned int y = ny - 1 - (next_pixel / nx);
-//			generate_ray(i, x, y);
-//		}
-//		else { // ray has been scattered
-//			s.not_absorbed *= crec.color;
-//			h_rays[i].origin = crec.origin;
-//			h_rays[i].direction = crec.direction;
-//			++s.depth;
-//		}
-//	}
-//	//std::sort(pixel_idx, pixel_idx + numpixels(), pixel_compare(pixels));
-//	//num_rays = remaining_pixels > 0 ? numpixels() : 0;
-//
-//	compact += clock() - start;
-//}
 
 void renderer::destroy() {
 	// Free device global memory
@@ -408,9 +389,13 @@ void renderer::destroy() {
 	err(cudaFree(d_hits), "free device d_hits");
 	err(cudaFree(d_clrs), "free device d_clrs");
 
+	err(cudaStreamDestroy(stream), "destroy cuda stream");
+
+	cudaFreeHost(h_clrs);
+	cudaFreeHost(wunits[0]->rays);
+	cudaFreeHost(wunits[1]->rays);
+
 	// Free host memory
 	delete[] samples;
-	delete[] h_clrs;
-	delete wunitA;
-	delete wunitB;
+	delete[] wunits;
 }

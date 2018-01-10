@@ -242,7 +242,7 @@ int main(int argc, char** argv)
 
 	const int nx = 600;
 	const int ny = 300;
-	const int ns = 100;
+	const int ns = 1000;
 	hitable_list *world;
 	camera *cam;
 	sphere *light_shape;
@@ -263,15 +263,11 @@ int main(int argc, char** argv)
     clock_t begin = clock();
 
 	unsigned int iteration = 0;
-	unsigned int total_rays = 0;
 	bool rendering = true;
 	while ((show_window && !w->quit) || (!show_window && r.is_not_done()))
 	{
 		if (r.is_not_done()) {
-			total_rays += r.numpixels();
-
-			// compute ray-world intersections
-			r.run_kernel();
+			r.render();
 		} else if (rendering) {
 			rendering = false;
 			w->set_title("Voxel Tracer");
@@ -292,7 +288,7 @@ int main(int argc, char** argv)
     clock_t end = clock();
 	printf("rendering %d iterations, %d rays, duration %.2f seconds\nkernel %.2f seconds\ngenerate %.2f seconds\ncompact %.2f seconds\n",
 		iteration,
-		total_rays,
+		r.totalrays(),
 		double(end - begin) / CLOCKS_PER_SEC,
 		double(r.kernel) / CLOCKS_PER_SEC,
 		double(r.generate) / CLOCKS_PER_SEC,

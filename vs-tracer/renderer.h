@@ -22,10 +22,11 @@ struct pixel {
 struct work_unit {
 	const uint start_idx;
 	const uint end_idx;
+	ray* rays;
 	bool compact;
 	bool done;
 
-	work_unit(uint start, uint end) :start_idx(start), end_idx(end), compact(false), done(false) {}
+	work_unit(uint start, uint end, ray* _rays) :start_idx(start), end_idx(end), rays(_rays), compact(false), done(false) {}
 	uint length() const { return end_idx - start_idx; }
 };
 
@@ -43,25 +44,21 @@ public:
 	}
 
 	unsigned int numpixels() const { return nx*ny; }
-	bool is_not_done() const { return !(wunitA->done && wunitB->done); }
+	bool is_not_done() const { return !(wunits[0]->done && wunits[1]->done); }
 	unsigned int get_pixelId(int x, int y) const { return (ny - y - 1)*nx + x; }
 	float3 get_pixel_color(int x, int y) const {
 		const unsigned int pixelId = get_pixelId(x, y);
 		if (pixels[pixelId].done == 0) return make_float3(0, 0, 0);
 		return h_colors[pixelId] / float(pixels[pixelId].done);
 	}
+	uint totalrays() const { return total_rays; }
 
 	void prepare_kernel();
 	void update_camera();
 
 	bool color(int ray_idx);
 	void generate_rays();
-	void run_kernel();
-	void run_kernel(work_unit* wu);
-	void copy_rays_to_gpu(const work_unit* wu);
-	void start_kernel(const work_unit* wu);
-	void copy_colors_from_gpu(const work_unit* wu);
-	void compact_rays(work_unit* wu);
+	void render();
 
 	void destroy();
 
@@ -75,7 +72,7 @@ public:
 
 	sample* samples;
 	clr_rec* h_clrs;
-	ray* h_rays;
+	ray** h_rays;
 	ray* d_rays;
 	cu_hit* d_hits;
 	clr_rec* d_clrs;
@@ -91,12 +88,19 @@ public:
 	clock_t compact = 0;
 
 private:
-	work_unit *wunitA;
-	work_unit *wunitB;
+	void render_cycle(work_unit* wu1, work_unit* wu2);
+	void copy_rays_to_gpu(const work_unit* wu);
+	void start_kernel(const work_unit* wu);
+	void copy_colors_from_gpu(const work_unit* wu);
+	void compact_rays(work_unit* wu);
+
+	uint total_rays;
+	cudaStream_t stream;
+	work_unit **wunits;
 	uint next_pixel = 0;
 	int remaining_pixels = 0;
 	uint num_runs = 0;
 	sphere *light_shape;
 	int* pixel_idx;
-	inline void generate_ray(int ray_idx, int x, int y);
+	inline void generate_ray(work_unit* wu, int ray_idx, int x, int y);
 };

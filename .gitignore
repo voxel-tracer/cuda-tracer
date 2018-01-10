@@ -7,3 +7,7 @@ Release
 
 *.ppm
 *.png
+
+*.nvact
+
+*.TMP
