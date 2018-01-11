@@ -237,12 +237,13 @@ void random_scene(hitable_list **scene, camera **cam, sphere **light_shape, floa
  */
 int main(int argc, char** argv)
 {
-	bool write_image = true;
-	bool show_window = false;
+	bool write_image = false;
+	bool show_window = true;
 
 	const int nx = 600;
 	const int ny = 300;
 	const int ns = 1000;
+	const uint max_depth = 50;
 	hitable_list *world;
 	camera *cam;
 	sphere *light_shape;
@@ -252,7 +253,7 @@ int main(int argc, char** argv)
 	const float phi = 1.832596f;
 	cam->look_from(theta, phi);
 
-	renderer r(cam, world, light_shape, nx, ny, ns, 50, 0.001f);
+	renderer r(cam, world, light_shape, nx, ny, ns, max_depth, 0.001f);
 	r.prepare_kernel();
 
 	window *w;

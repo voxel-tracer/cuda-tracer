@@ -80,7 +80,7 @@ void renderer::prepare_kernel() {
 
 	// set temporary variables
 	for (unsigned int i = 0; i < num_pixels; i++) {
-		pixels[i].id = i;
+		pixels[i] = pixel(i, i / half_numpixels);
 		pixels[i].samples = 1;
 	}
 
@@ -100,16 +100,20 @@ void renderer::update_camera()
 	const unsigned int num_pixels = numpixels();
 
 	// set temporary variables
-	for (unsigned int i = 0; i < num_pixels; i++)
-	{
+	for (unsigned int i = 0; i < num_pixels; i++) {
 		h_colors[i] = make_float3(0, 0, 0);
 		pixels[i].id = i;
 		pixels[i].samples = 1;
 		pixels[i].done = 0;
 	}
 
-	for (uint i = 0; i < 2; i++)
-	{
+	// reset the order of all work units otherwise generate_rays() will be wrong
+	if (wunits[0]->start_idx > wunits[1]->start_idx) {
+		work_unit* wu = wunits[0];
+		wunits[0] = wunits[1];
+		wunits[1] = wu;
+	}
+	for (uint i = 0; i < 2; i++) {
 		wunits[i]->compact = false;
 		wunits[i]->done = false;
 	}
@@ -123,16 +127,17 @@ void renderer::generate_rays() {
 	uint ray_idx = 0;
 	for (int j = ny - 1; j >= 0; j--)
 		for (int i = 0; i < nx; ++i, ++ray_idx) {
-			uint unit = ray_idx / half_pixels;
-			generate_ray(wunits[unit], ray_idx%half_pixels, i, j);
+			// for initial generation ray_idx == pixelId
+			generate_ray(wunits[pixels[ray_idx].unit_idx], ray_idx, i, j);
 		}
 }
 
-inline void renderer::generate_ray(work_unit* wu, int ray_idx, int x, int y) {
-	float u = float(x + drand48()) / float(nx);
-	float v = float(y + drand48()) / float(ny);
-	cam->get_ray(u, v, wu->rays[ray_idx]);
-	samples[wu->start_idx + ray_idx] = sample((ny - y - 1)*nx + x);
+inline void renderer::generate_ray(work_unit* wu, const uint sampleId, int x, int y) {
+	const float u = float(x + drand48()) / float(nx);
+	const float v = float(y + drand48()) / float(ny);
+	const uint local_ray_idx = sampleId - wu->start_idx;
+	cam->get_ray(u, v,wu->rays[local_ray_idx]);
+	samples[sampleId] = sample((ny - y - 1)*nx + x);
 }
 
 bool renderer::color(int ray_idx) {
@@ -379,7 +384,7 @@ void renderer::compact_rays(work_unit* wu) {
 				// then, generate a new sample
 				const unsigned int x = pixelId % nx;
 				const unsigned int y = ny - 1 - (pixelId / nx);
-				generate_ray(wu, i, x, y);
+				generate_ray(wu, sId, x, y);
 			}
 		}
 	}

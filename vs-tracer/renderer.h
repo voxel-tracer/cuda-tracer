@@ -13,10 +13,14 @@ struct cu_hit {
 struct pixel {
 	//TODO pixel should know it's coordinates and it's id should be a computed field
 	uint id;
+	uint unit_idx;
+
 	uint samples;
 	uint done; // needed to differentiate between done vs ongoing samples, when doing progressive rendering
 
-	pixel(): id(0), samples(0), done(0) {}
+	pixel(): id(0), unit_idx(0), samples(0), done(0) {}
+	pixel(uint _id, uint _unit_idx) : id(_id), unit_idx(_unit_idx), samples(0), done(0) {}
+	pixel(const pixel &p) : id(p.id), unit_idx(p.unit_idx), samples(p.samples), done(p.done) {}
 };
 
 struct work_unit {
@@ -102,5 +106,5 @@ private:
 	uint num_runs = 0;
 	sphere *light_shape;
 	int* pixel_idx;
-	inline void generate_ray(work_unit* wu, int ray_idx, int x, int y);
+	inline void generate_ray(work_unit* wu, const uint ray_idx, int x, int y);
 };
