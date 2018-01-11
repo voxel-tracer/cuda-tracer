@@ -11,3 +11,5 @@ Release
 *.nvact
 
 *.TMP
+
+\.vs/vs-tracer/v14/
