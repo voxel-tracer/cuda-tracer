@@ -34,7 +34,7 @@ struct window {
 	renderer& w_r;
 	camera *w_cam;
 
-	window(int nx, int ny, float t, float p, renderer &r, camera *cam): w_nx(nx), w_ny(ny), w_r(r), w_cam(cam), theta(t), phi(p) {
+	window(int nx, int ny, float t, float p, renderer &r, camera *cam): w_nx(nx), w_ny(ny), w_r(r), w_cam(cam), theta(t), phi(p), quit(false) {
 		SDL_Init(SDL_INIT_VIDEO);
 
 		w_screen = SDL_CreateWindow("Voxel Tracer (rendering)", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, nx, ny, 0);
