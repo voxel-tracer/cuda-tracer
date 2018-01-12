@@ -20,29 +20,29 @@ struct window {
 	SDL_Window* w_screen;
 	SDL_Renderer* w_renderer;
 	SDL_Texture* w_texture;
-	unsigned int *w_pixels;
-	int w_nx;
-	int w_ny;
+	uint *w_pixels;
+	const uint w_nx;
+	const uint w_ny;
 
-	bool quit;
-	bool mouse_drag;
+	bool quit = false;
+	bool mouse_drag = false;
 
 	float theta = (float)(80 * M_PI / 180);
 	float phi = (float)(45 * M_PI / 180);
 	const float delta = (float)(1 * M_PI / 180);
 
 	renderer& w_r;
-	camera *w_cam;
+	camera * const w_cam;
 
-	window(int nx, int ny, float t, float p, renderer &r, camera *cam): w_nx(nx), w_ny(ny), w_r(r), w_cam(cam), theta(t), phi(p), quit(false) {
+	window(const uint nx, const uint ny, float t, float p, renderer &r, camera* const cam): w_nx(nx), w_ny(ny), w_r(r), w_cam(cam), theta(t), phi(p) {
 		SDL_Init(SDL_INIT_VIDEO);
 
 		w_screen = SDL_CreateWindow("Voxel Tracer (rendering)", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, nx, ny, 0);
 		w_renderer = SDL_CreateRenderer(w_screen, -1, 0);
 		w_texture = SDL_CreateTexture(w_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, nx, ny);
-		w_pixels = new unsigned int[nx*ny];
+		w_pixels = new uint[nx*ny];
 
-		cam->look_from(theta, phi);
+		w_cam->look_from(theta, phi);
 		w_r.update_camera();
 	}
 

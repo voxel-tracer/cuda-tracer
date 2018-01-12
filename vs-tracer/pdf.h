@@ -17,7 +17,6 @@ struct pdf {
 
 	__device__ float value(const float3& direction) const;
 	__device__ float3 generate(seed_t seed) const;
-	__device__ pdf() : type(COSINE), o() {}
 
 	const pdf_type type;
 

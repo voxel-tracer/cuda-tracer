@@ -6,19 +6,19 @@
 #include "hitable_list.h"
 
 struct cu_hit {
-	int hit_idx;
-	float hit_t;
+	int hit_idx = 0;
+	float hit_t = 0;
 };
 
 struct pixel {
 	//TODO pixel should know it's coordinates and it's id should be a computed field
-	uint id;
-	uint unit_idx;
+	uint id = 0;
+	uint unit_idx = 0;
 
-	uint samples;
-	uint done; // needed to differentiate between done vs ongoing samples, when doing progressive rendering
+	uint samples = 0;
+	uint done = 0; // needed to differentiate between done vs ongoing samples, when doing progressive rendering
 
-	pixel(): id(0), unit_idx(0), samples(0), done(0) {}
+	pixel() {}
 	pixel(uint _id, uint _unit_idx) : id(_id), unit_idx(_unit_idx), samples(0), done(0) {}
 	pixel(const pixel &p) : id(p.id), unit_idx(p.unit_idx), samples(p.samples), done(p.done) {}
 };
@@ -26,26 +26,18 @@ struct pixel {
 struct work_unit {
 	const uint start_idx;
 	const uint end_idx;
-	ray* rays;
-	bool compact;
-	bool done;
+	ray* const rays;
+	bool compact = false;
+	bool done = false;
 
-	work_unit(uint start, uint end, ray* _rays) :start_idx(start), end_idx(end), rays(_rays), compact(false), done(false) {}
+	work_unit(uint start, uint end, ray* _rays) :start_idx(start), end_idx(end), rays(_rays) {}
 	uint length() const { return end_idx - start_idx; }
 };
 
 class renderer {
 public:
-	renderer(camera* _cam, hitable_list* w, sphere *ls, unsigned int _nx, unsigned int _ny, unsigned int _ns, unsigned int _max_depth, float _min_attenuation) { 
-		cam = _cam;
-		world = w;
-		nx = _nx; 
-		ny = _ny; 
-		ns = _ns;
-		max_depth = _max_depth;
-		min_attenuation = _min_attenuation;
-		light_shape = ls;
-	}
+	renderer(const camera* _cam, const hitable_list* w, const sphere *ls, unsigned int _nx, unsigned int _ny, unsigned int _ns, unsigned int _max_depth, float _min_attenuation):
+		cam(_cam), world(w), light_shape(ls), nx(_nx), ny(_ny), ns(_ns), max_depth(_max_depth), min_attenuation(_min_attenuation) {}
 
 	unsigned int numpixels() const { return nx*ny; }
 	bool is_not_done() const { return !(wunits[0]->done && wunits[1]->done); }
@@ -66,13 +58,13 @@ public:
 
 	void destroy();
 
-	camera* cam;
-	hitable_list *world;
-	unsigned int nx;
-	unsigned int ny;
-	unsigned int ns;
-	unsigned int max_depth;
-	float min_attenuation;
+	const camera* const cam;
+	const hitable_list * const world;
+	const uint nx;
+	const uint ny;
+	const uint ns;
+	const uint max_depth;
+	const float min_attenuation;
 
 	sample* samples;
 	clr_rec* h_clrs;
@@ -97,14 +89,14 @@ private:
 	void start_kernel(const work_unit* wu);
 	void copy_colors_from_gpu(const work_unit* wu);
 	void compact_rays(work_unit* wu);
+	inline void generate_ray(work_unit* wu, const uint ray_idx, int x, int y);
 
-	uint total_rays;
+	uint total_rays = 0;
 	cudaStream_t stream;
 	work_unit **wunits;
 	uint next_pixel = 0;
 	int remaining_pixels = 0;
 	uint num_runs = 0;
-	sphere *light_shape;
+	const sphere * const light_shape;
 	int* pixel_idx;
-	inline void generate_ray(work_unit* wu, const uint ray_idx, int x, int y);
 };

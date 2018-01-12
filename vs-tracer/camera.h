@@ -44,6 +44,7 @@ public:
 		r.direction = lower_left_corner + s*horizontal + t*vertical - origin - offset;
 	}
 
+private:
 	float3 lookat;
 	float3 origin;
 	float3 vup;
@@ -55,7 +56,6 @@ public:
 	float3 vertical;
 	float3 u, v, w;
 	float lens_radius;
-private:
 	float radial_distance;
 };
 

@@ -17,11 +17,11 @@ struct ray {
 struct sample {
 	uint pixelId;
 	float3 not_absorbed;
-	uint depth;
-	bool done;
+	uint depth = 0;
+	bool done = false;
 
 	sample() {}
-	sample(int pId): pixelId(pId), depth(0), done(false) {
+	sample(int pId): pixelId(pId) {
 		not_absorbed = make_float3(1, 1, 1);
 	}
 	sample(const sample& s) :pixelId(s.pixelId), not_absorbed(s.not_absorbed), depth(s.depth), done(s.done) {}
@@ -31,7 +31,7 @@ struct clr_rec {
 	float3 color;
 	float3 origin;
 	float3 direction;
-	bool done;
+	bool done = false;
 
 	clr_rec() {
 		color = make_float3(0, 0, 0);
