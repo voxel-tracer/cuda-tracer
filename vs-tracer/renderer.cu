@@ -85,6 +85,7 @@ void renderer::prepare_kernel() {
 	}
 
 	wunits = new work_unit*[2];
+
 	wunits[0] = new work_unit(0, half_numpixels, h_rays[0]);
 	wunits[1] = new work_unit(half_numpixels, num_pixels, h_rays[1]);
 
@@ -92,7 +93,8 @@ void renderer::prepare_kernel() {
 	generate_rays();
 	//generate += clock() - start;
 
-	err(cudaStreamCreate(&stream), "cuda stream create");
+	err(cudaStreamCreate(&wunits[0]->stream), "cuda stream create");
+	err(cudaStreamCreate(&wunits[1]->stream), "cuda stream create");
 }
 
 void renderer::update_camera()
@@ -293,19 +295,19 @@ __global__ void simple_color(const ray* rays, const cu_hit* hits, clr_rec* clrs,
 }
 
 void renderer::copy_rays_to_gpu(const work_unit* wu) {
-	err(cudaMemcpyAsync(d_rays, wu->rays, wu->length() * sizeof(ray), cudaMemcpyHostToDevice, stream), "copy rays from host to device");
+	err(cudaMemcpyAsync(d_rays, wu->rays, wu->length() * sizeof(ray), cudaMemcpyHostToDevice, wu->stream), "copy rays from host to device");
 }
 
 void renderer::copy_colors_from_gpu(const work_unit* wu) {
-	err(cudaMemcpyAsync(h_clrs, d_clrs, wu->length() * sizeof(clr_rec), cudaMemcpyDeviceToHost, stream), "copy results from device to host");
+	err(cudaMemcpyAsync(h_clrs, d_clrs, wu->length() * sizeof(clr_rec), cudaMemcpyDeviceToHost, wu->stream), "copy results from device to host");
 }
 
 void renderer::start_kernel(const work_unit* wu) {
 	int threadsPerBlock = 128;
 	int blocksPerGrid = (wu->length() + threadsPerBlock - 1) / threadsPerBlock;
-	hit_scene <<<blocksPerGrid, threadsPerBlock, 0, stream >>>(d_rays, wu->length(), d_scene, world->list_size, 0.1f, FLT_MAX, d_hits);
+	hit_scene <<<blocksPerGrid, threadsPerBlock, 0, wu->stream >>>(d_rays, wu->length(), d_scene, world->list_size, 0.1f, FLT_MAX, d_hits);
 	//err(cudaGetLastError(), "launch hit_scene kernel");
-	simple_color <<<blocksPerGrid, threadsPerBlock, 0, stream >>>(d_rays, d_hits, d_clrs, num_runs++, wu->length(), d_scene, world->list_size, d_materials, world->material_size, max_depth);
+	simple_color <<<blocksPerGrid, threadsPerBlock, 0, wu->stream >>>(d_rays, d_hits, d_clrs, num_runs++, wu->length(), d_scene, world->list_size, d_materials, world->material_size, max_depth);
 	//err(cudaGetLastError(), "launch simple_color kernel");
 }
 
@@ -327,7 +329,7 @@ void renderer::render_cycle(work_unit* wu1, work_unit* wu2) {
 		copy_rays_to_gpu(wu1);
 		start_kernel(wu1);
 		copy_colors_from_gpu(wu1);
-		cudaStreamQuery(stream); // flush stream to start the kernel
+		cudaStreamQuery(wu1->stream); // flush stream to start the kernel
 		wu1->compact = true;
 		total_rays += wu1->length();
 		kernel += clock() - start;
@@ -342,7 +344,7 @@ void renderer::render_cycle(work_unit* wu1, work_unit* wu2) {
 
 	if (!wu1->done) {
 		clock_t start = clock();
-		cudaStreamSynchronize(stream);
+		cudaStreamSynchronize(wu1->stream);
 		kernel += clock() - start;
 	}
 }
@@ -400,7 +402,8 @@ void renderer::destroy() {
 	err(cudaFree(d_hits), "free device d_hits");
 	err(cudaFree(d_clrs), "free device d_clrs");
 
-	err(cudaStreamDestroy(stream), "destroy cuda stream");
+	err(cudaStreamDestroy(wunits[0]->stream), "destroy cuda stream");
+	err(cudaStreamDestroy(wunits[1]->stream), "destroy cuda stream");
 
 	cudaFreeHost(h_clrs);
 	cudaFreeHost(wunits[0]->rays);

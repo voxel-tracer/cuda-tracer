@@ -24,6 +24,7 @@ struct pixel {
 };
 
 struct work_unit {
+	cudaStream_t stream;
 	const uint start_idx;
 	const uint end_idx;
 	ray* const rays;
@@ -92,7 +93,6 @@ private:
 	inline void generate_ray(work_unit* wu, const uint ray_idx, int x, int y);
 
 	uint total_rays = 0;
-	cudaStream_t stream;
 	work_unit **wunits;
 	uint next_pixel = 0;
 	int remaining_pixels = 0;
