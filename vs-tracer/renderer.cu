@@ -53,26 +53,11 @@ void renderer::prepare_kernel() {
 	h_colors = new float3[num_pixels];
 	pixel_idx = new int[half_numpixels];
 
-	h_rays = new ray*[2];
-	cudaMallocHost(&h_rays[0], half_numpixels * sizeof(ray));
-	cudaMallocHost(&h_rays[1], half_numpixels * sizeof(ray));
-
-	cudaMallocHost(&h_clrs, half_numpixels * sizeof(clr_rec));
-
 	// allocate device memory for input
     d_scene = NULL;
 	err(cudaMalloc((void **)&d_scene, world->list_size * sizeof(sphere)), "allocate device d_scene");
 	d_materials = NULL;
 	err(cudaMalloc((void **)&d_materials, world->material_size * sizeof(material)), "allocate device d_materials");
-
-    d_rays = NULL;
-	err(cudaMalloc((void **)&d_rays, half_numpixels * sizeof(ray)), "allocate device d_rays");
-
-    d_hits = NULL;
-	err(cudaMalloc((void **)&d_hits, half_numpixels * sizeof(cu_hit)), "allocate device d_hits");
-
-	d_clrs = NULL;
-	err(cudaMalloc((void **)&d_clrs, half_numpixels * sizeof(clr_rec)), "allocate device d_clrs");
 
     // Copy the host input in host memory to the device input in device memory
 	err(cudaMemcpy(d_scene, world->list, world->list_size * sizeof(sphere), cudaMemcpyHostToDevice), "copy scene from host to device");
@@ -86,8 +71,23 @@ void renderer::prepare_kernel() {
 
 	wunits = new work_unit*[2];
 
-	wunits[0] = new work_unit(0, half_numpixels, h_rays[0]);
-	wunits[1] = new work_unit(half_numpixels, num_pixels, h_rays[1]);
+	wunits[0] = new work_unit(0, half_numpixels);
+	wunits[1] = new work_unit(half_numpixels, num_pixels);
+
+	cudaMallocHost(&wunits[0]->h_rays, half_numpixels * sizeof(ray));
+	cudaMallocHost(&wunits[1]->h_rays, half_numpixels * sizeof(ray));
+
+	err(cudaMalloc((void **)&(wunits[0]->d_rays), half_numpixels * sizeof(ray)), "allocate device d_rays");
+	err(cudaMalloc((void **)&(wunits[1]->d_rays), half_numpixels * sizeof(ray)), "allocate device d_rays");
+
+	err(cudaMalloc((void **)&(wunits[0]->d_hits), half_numpixels * sizeof(cu_hit)), "allocate device d_hits");
+	err(cudaMalloc((void **)&(wunits[1]->d_hits), half_numpixels * sizeof(cu_hit)), "allocate device d_hits");
+
+	cudaMallocHost(&(wunits[0]->h_clrs), half_numpixels * sizeof(clr_rec));
+	cudaMallocHost(&(wunits[1]->h_clrs), half_numpixels * sizeof(clr_rec));
+
+	err(cudaMalloc((void **)&(wunits[0]->d_clrs), half_numpixels * sizeof(clr_rec)), "allocate device d_clrs");
+	err(cudaMalloc((void **)&(wunits[1]->d_clrs), half_numpixels * sizeof(clr_rec)), "allocate device d_clrs");
 
 	//clock_t start = clock();
 	generate_rays();
@@ -138,7 +138,7 @@ inline void renderer::generate_ray(work_unit* wu, const uint sampleId, int x, in
 	const float u = float(x + drand48()) / float(nx);
 	const float v = float(y + drand48()) / float(ny);
 	const uint local_ray_idx = sampleId - wu->start_idx;
-	cam->get_ray(u, v,wu->rays[local_ray_idx]);
+	cam->get_ray(u, v,wu->h_rays[local_ray_idx]);
 	samples[sampleId] = sample((ny - y - 1)*nx + x);
 }
 
@@ -295,19 +295,19 @@ __global__ void simple_color(const ray* rays, const cu_hit* hits, clr_rec* clrs,
 }
 
 void renderer::copy_rays_to_gpu(const work_unit* wu) {
-	err(cudaMemcpyAsync(d_rays, wu->rays, wu->length() * sizeof(ray), cudaMemcpyHostToDevice, wu->stream), "copy rays from host to device");
+	err(cudaMemcpyAsync(wu->d_rays, wu->h_rays, wu->length() * sizeof(ray), cudaMemcpyHostToDevice, wu->stream), "copy rays from host to device");
 }
 
 void renderer::copy_colors_from_gpu(const work_unit* wu) {
-	err(cudaMemcpyAsync(h_clrs, d_clrs, wu->length() * sizeof(clr_rec), cudaMemcpyDeviceToHost, wu->stream), "copy results from device to host");
+	err(cudaMemcpyAsync(wu->h_clrs, wu->d_clrs, wu->length() * sizeof(clr_rec), cudaMemcpyDeviceToHost, wu->stream), "copy results from device to host");
 }
 
 void renderer::start_kernel(const work_unit* wu) {
 	int threadsPerBlock = 128;
 	int blocksPerGrid = (wu->length() + threadsPerBlock - 1) / threadsPerBlock;
-	hit_scene <<<blocksPerGrid, threadsPerBlock, 0, wu->stream >>>(d_rays, wu->length(), d_scene, world->list_size, 0.1f, FLT_MAX, d_hits);
+	hit_scene <<<blocksPerGrid, threadsPerBlock, 0, wu->stream >>>(wu->d_rays, wu->length(), d_scene, world->list_size, 0.1f, FLT_MAX, wu->d_hits);
 	//err(cudaGetLastError(), "launch hit_scene kernel");
-	simple_color <<<blocksPerGrid, threadsPerBlock, 0, wu->stream >>>(d_rays, d_hits, d_clrs, num_runs++, wu->length(), d_scene, world->list_size, d_materials, world->material_size, max_depth);
+	simple_color <<<blocksPerGrid, threadsPerBlock, 0, wu->stream >>>(wu->d_rays, wu->d_hits, wu->d_clrs, num_runs++, wu->length(), d_scene, world->list_size, d_materials, world->material_size, max_depth);
 	//err(cudaGetLastError(), "launch simple_color kernel");
 }
 
@@ -349,12 +349,23 @@ void renderer::render_cycle(work_unit* wu1, work_unit* wu2) {
 	}
 }
 
+void renderer::render_work_unit(uint unit_idx) {
+	work_unit* wu = wunits[unit_idx];
+	while (!wu->done) {
+		copy_rays_to_gpu(wu);
+		start_kernel(wu);
+		copy_colors_from_gpu(wu);
+		cudaStreamSynchronize(wu->stream);
+		compact_rays(wu);
+	}
+}
+
 void renderer::compact_rays(work_unit* wu) {
 	uint done_samples = 0;
 	bool not_done = false;
 	for (uint i = 0; i < wu->length(); ++i) {
 		const uint sId = wu->start_idx + i;
-		const clr_rec& crec = h_clrs[i];
+		const clr_rec& crec = wu->h_clrs[i];
 		sample& s = samples[sId];
 		const uint pixelId = s.pixelId;
 		s.done = crec.done || s.depth == max_depth;
@@ -364,8 +375,8 @@ void renderer::compact_rays(work_unit* wu) {
 			++done_samples;
 		} else {
 			s.not_absorbed *= crec.color;
-			wu->rays[i].origin = crec.origin;
-			wu->rays[i].direction = crec.direction;
+			wu->h_rays[i].origin = crec.origin;
+			wu->h_rays[i].direction = crec.direction;
 			++s.depth;
 		}
 		not_done = not_done || (pixels[pixelId].done < ns);
@@ -398,16 +409,20 @@ void renderer::destroy() {
 	// Free device global memory
 	err(cudaFree(d_scene), "free device d_scene");
 	err(cudaFree(d_materials), "free device d_materials");
-	err(cudaFree(d_rays), "free device d_rays");
-	err(cudaFree(d_hits), "free device d_hits");
-	err(cudaFree(d_clrs), "free device d_clrs");
+	err(cudaFree(wunits[0]->d_rays), "free device d_rays");
+	err(cudaFree(wunits[1]->d_rays), "free device d_rays");
+	err(cudaFree(wunits[0]->d_hits), "free device d_hits");
+	err(cudaFree(wunits[1]->d_hits), "free device d_hits");
+	err(cudaFree(wunits[0]->d_clrs), "free device d_clrs");
+	err(cudaFree(wunits[1]->d_clrs), "free device d_clrs");
 
 	err(cudaStreamDestroy(wunits[0]->stream), "destroy cuda stream");
 	err(cudaStreamDestroy(wunits[1]->stream), "destroy cuda stream");
 
-	cudaFreeHost(h_clrs);
-	cudaFreeHost(wunits[0]->rays);
-	cudaFreeHost(wunits[1]->rays);
+	cudaFreeHost(wunits[0]->h_clrs);
+	cudaFreeHost(wunits[1]->h_clrs);
+	cudaFreeHost(wunits[0]->h_rays);
+	cudaFreeHost(wunits[1]->h_rays);
 
 	// Free host memory
 	delete[] samples;

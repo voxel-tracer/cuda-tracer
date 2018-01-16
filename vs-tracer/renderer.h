@@ -27,11 +27,15 @@ struct work_unit {
 	cudaStream_t stream;
 	const uint start_idx;
 	const uint end_idx;
-	ray* const rays;
+	ray* h_rays;
+	ray* d_rays;
+	cu_hit* d_hits;
+	clr_rec* h_clrs;
+	clr_rec* d_clrs;
 	bool compact = false;
 	bool done = false;
 
-	work_unit(uint start, uint end, ray* _rays) :start_idx(start), end_idx(end), rays(_rays) {}
+	work_unit(uint start, uint end) :start_idx(start), end_idx(end) {}
 	uint length() const { return end_idx - start_idx; }
 };
 
@@ -56,6 +60,8 @@ public:
 	bool color(int ray_idx);
 	void generate_rays();
 	void render();
+	
+	void render_work_unit(uint unit_idx);
 
 	void destroy();
 
@@ -68,11 +74,6 @@ public:
 	const float min_attenuation;
 
 	sample* samples;
-	clr_rec* h_clrs;
-	ray** h_rays;
-	ray* d_rays;
-	cu_hit* d_hits;
-	clr_rec* d_clrs;
 	sphere* d_scene;
 	material* d_materials;
 	bool init_rnds = true;

@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <ctime>
 #include <SDL.h>
+#include <thread>
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
@@ -232,14 +233,19 @@ void random_scene(hitable_list **scene, camera **cam, sphere **light_shape, floa
 	*cam = new camera(make_float3(13, 2, 3), make_float3(0, 0, 0), make_float3(0, 1, 0), 20, aspect, 0.1, 10.0);
 }
 
+void call_from_thread(renderer& r, const uint unit_idx) {
+	r.render_work_unit(unit_idx);
+}
+
 /**
  * Host main routine
  */
 int main(int argc, char** argv)
 {
-	bool write_image = false;
-	bool show_window = true;
+	bool write_image = true;
+	bool show_window = false;
 
+	const uint num_threads = 2;
 	const int nx = 600;
 	const int ny = 300;
 	const int ns = 1000;
@@ -256,6 +262,16 @@ int main(int argc, char** argv)
 	renderer r(cam, world, light_shape, nx, ny, ns, max_depth, 0.001f);
 	r.prepare_kernel();
 
+	clock_t begin = clock();
+	thread t[num_threads];
+	// launch a group of threads 
+	for (uint i = 0; i < num_threads; i++)
+		t[i] = thread(call_from_thread, r, i);
+	// join the threads with the main thread
+	for (uint i = 0; i < num_threads; i++)
+		t[i].join();
+	cout << "total execution took " << double(clock() - begin) / CLOCKS_PER_SEC << endl;
+/*
 	window *w;
 	if (show_window) {
 		w = new window(nx, ny, theta, phi, r, cam);
@@ -301,28 +317,9 @@ int main(int argc, char** argv)
 		w->wait_to_quit();
 		w->destroy();
 	}
-  
+ */ 
 	if (write_image) {
 		// generate final image
-/*
-		ofstream image;
-		image.open("picture.ppm");
-		image << "P3\n" << nx << " " << ny << "\n255\n";
-		unsigned int sample_idx = 0;
-		for (int j = ny - 1; j >= 0; j--)
-		{
-			for (int i = 0; i < nx; ++i, sample_idx++)
-			{
-				float3 col = r.get_pixel_color(i, j);
-				col = float3(sqrtf(col[0]), sqrtf(col[1]), sqrtf(col[2]));
-				int ir = min(255, int(255.99*col.r()));
-				int ig = min(255, int(255.99*col.g()));
-				int ib = min(255, int(255.99*col.b()));
-
-				image << ir << " " << ig << " " << ib << "\n";
-			}
-		}
-*/
 		char *data = new char[nx*ny * 3];
 		int idx = 0;
 		for (int y = ny-1; y >= 0; y--) {
