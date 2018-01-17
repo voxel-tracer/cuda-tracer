@@ -11,14 +11,11 @@ struct cu_hit {
 };
 
 struct pixel {
-	uint unit_idx = 0;
-
 	uint samples = 0;
 	uint done = 0; // needed to differentiate between done vs ongoing samples, when doing progressive rendering
 
 	pixel() {}
-	pixel(uint _id, uint _unit_idx) : unit_idx(_unit_idx), samples(0), done(0) {}
-	pixel(const pixel &p) : unit_idx(p.unit_idx), samples(p.samples), done(p.done) {}
+	pixel(const pixel &p) : samples(p.samples), done(p.done) {}
 };
 
 struct work_unit {

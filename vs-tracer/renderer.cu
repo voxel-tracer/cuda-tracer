@@ -73,10 +73,8 @@ void renderer::prepare_kernel() {
 		wu->samples = new sample[unit_len];
 
 		wu->pixels = new pixel[unit_len];
-		for (uint i = 0; i < unit_len; i++) {
-			wu->pixels[i] = pixel(cur_idx + i, unit);
+		for (uint i = 0; i < unit_len; i++)
 			wu->pixels[i].samples = 1;
-		}
 
 		err(cudaMallocHost(&wu->h_rays, unit_len * sizeof(ray)), "allocate h_rays");
 		err(cudaMalloc((void **)&(wu->d_rays), unit_len * sizeof(ray)), "allocate device d_rays");
