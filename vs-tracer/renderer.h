@@ -11,16 +11,14 @@ struct cu_hit {
 };
 
 struct pixel {
-	//TODO pixel should know it's coordinates and it's id should be a computed field
-	uint id = 0;
 	uint unit_idx = 0;
 
 	uint samples = 0;
 	uint done = 0; // needed to differentiate between done vs ongoing samples, when doing progressive rendering
 
 	pixel() {}
-	pixel(uint _id, uint _unit_idx) : id(_id), unit_idx(_unit_idx), samples(0), done(0) {}
-	pixel(const pixel &p) : id(p.id), unit_idx(p.unit_idx), samples(p.samples), done(p.done) {}
+	pixel(uint _id, uint _unit_idx) : unit_idx(_unit_idx), samples(0), done(0) {}
+	pixel(const pixel &p) : unit_idx(p.unit_idx), samples(p.samples), done(p.done) {}
 };
 
 struct work_unit {

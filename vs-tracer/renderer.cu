@@ -107,7 +107,6 @@ void renderer::update_camera()
 		work_unit* wu = wunits[unit];
 		wu->done = false;
 		for (uint i = 0; i < wu->length(); i++) {
-			wu->pixels[i].id = wu->start_idx + i;
 			wu->pixels[i].samples = 1;
 			wu->pixels[i].done = 0;
 		}
