@@ -34,6 +34,7 @@ struct work_unit {
 	clr_rec* d_clrs;
 	int * pixel_idx;
 	sample* samples;
+	pixel* pixels;
 
 	bool done = false;
 
@@ -46,14 +47,24 @@ public:
 	renderer(const camera* _cam, const hitable_list* w, const sphere *ls, unsigned int _nx, unsigned int _ny, unsigned int _ns, unsigned int _max_depth, float _min_attenuation, uint nunits):
 		cam(_cam), world(w), light_shape(ls), nx(_nx), ny(_ny), ns(_ns), max_depth(_max_depth), min_attenuation(_min_attenuation), num_units(nunits) {}
 
-	unsigned int numpixels() const { return nx*ny; }
+	uint numpixels() const { return nx*ny; }
 	bool is_not_done() const { return !(wunits[0]->done && wunits[1]->done); }
-	unsigned int get_pixelId(int x, int y) const { return (ny - y - 1)*nx + x; }
-	float3 get_pixel_color(int x, int y) const {
-		const unsigned int pixelId = get_pixelId(x, y);
-		if (pixels[pixelId].done == 0) return make_float3(0, 0, 0);
-		return h_colors[pixelId] / float(pixels[pixelId].done);
+	uint get_pixelId(int x, int y) const { return (ny - y - 1)*nx + x; }
+
+	uint get_unitIdx(uint pixelId) const {
+		const uint unit_numpixels = numpixels() / num_units;
+		return pixelId / unit_numpixels; 
 	}
+
+	float3 get_pixel_color(int x, int y) const {
+		const uint pixelId = get_pixelId(x, y);
+		const uint unitIdx = get_unitIdx(pixelId);
+		work_unit* wu = wunits[unitIdx];
+		const uint num_done = wu->pixels[pixelId - wu->start_idx].done;
+		if (num_done == 0) return make_float3(0, 0, 0);
+		return h_colors[pixelId] / float(num_done);
+	}
+
 	uint totalrays() const { return total_rays; }
 
 	void prepare_kernel();
@@ -78,7 +89,7 @@ public:
 	material* d_materials;
 	bool init_rnds = true;
 
-	pixel* pixels;
+	//pixel* pixels;
 	float3* h_colors;
 
 	clock_t kernel = 0;

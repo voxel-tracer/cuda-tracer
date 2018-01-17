@@ -48,7 +48,6 @@ void renderer::prepare_kernel() {
 	next_pixel = 0;
 	total_rays = 0;
 	
-	pixels = new pixel[num_pixels];
 	h_colors = new float3[num_pixels];
 
 	// allocate device memory for input
@@ -60,12 +59,6 @@ void renderer::prepare_kernel() {
     // Copy the host input in host memory to the device input in device memory
 	err(cudaMemcpy(d_scene, world->list, world->list_size * sizeof(sphere), cudaMemcpyHostToDevice), "copy scene from host to device");
 	err(cudaMemcpy(d_materials, world->materials, world->material_size * sizeof(material), cudaMemcpyHostToDevice), "copy materials from host to device");
-
-	// set temporary variables
-	for (unsigned int i = 0; i < num_pixels; i++) {
-		pixels[i] = pixel(i, i / unit_numpixels);
-		pixels[i].samples = 1;
-	}
 
 	wunits = new work_unit*[num_units];
 	uint cur_idx = 0;
@@ -79,6 +72,11 @@ void renderer::prepare_kernel() {
 		//	wu->pixel_idx[i] = wu->start_idx + i;
 		wu->samples = new sample[unit_len];
 
+		wu->pixels = new pixel[unit_len];
+		for (uint i = 0; i < unit_len; i++) {
+			wu->pixels[i] = pixel(cur_idx + i, unit);
+			wu->pixels[i].samples = 1;
+		}
 
 		err(cudaMallocHost(&wu->h_rays, unit_len * sizeof(ray)), "allocate h_rays");
 		err(cudaMalloc((void **)&(wu->d_rays), unit_len * sizeof(ray)), "allocate device d_rays");
@@ -103,13 +101,17 @@ void renderer::update_camera()
 	// set temporary variables
 	for (unsigned int i = 0; i < num_pixels; i++) {
 		h_colors[i] = make_float3(0, 0, 0);
-		pixels[i].id = i;
-		pixels[i].samples = 1;
-		pixels[i].done = 0;
 	}
 
-	for (uint unit = 0; unit < num_units; unit++)
-		wunits[unit]->done = false;
+	for (uint unit = 0; unit < num_units; unit++) {
+		work_unit* wu = wunits[unit];
+		wu->done = false;
+		for (uint i = 0; i < wu->length(); i++) {
+			wu->pixels[i].id = wu->start_idx + i;
+			wu->pixels[i].samples = 1;
+			wu->pixels[i].done = 0;
+		}
+	}
 
 	generate_rays();
 	num_runs = 0;
@@ -120,7 +122,8 @@ void renderer::generate_rays() {
 	for (int j = ny - 1; j >= 0; j--)
 		for (int i = 0; i < nx; ++i, ++ray_idx) {
 			// for initial generation ray_idx == pixelId
-			generate_ray(wunits[pixels[ray_idx].unit_idx], ray_idx, i, j);
+			const uint unit_idx = get_unitIdx(ray_idx);
+			generate_ray(wunits[unit_idx], ray_idx, i, j);
 		}
 }
 
@@ -319,11 +322,11 @@ void renderer::compact_rays(work_unit* wu) {
 	for (uint i = 0; i < wu->length(); ++i) {
 		const clr_rec& crec = wu->h_clrs[i];
 		sample& s = wu->samples[i];
-		const uint pixelId = s.pixelId;
+		const uint local_pixelId = s.pixelId - wu->start_idx;
 		s.done = crec.done || s.depth == max_depth;
 		if (s.done) {
-			if (crec.done) h_colors[pixelId] += s.not_absorbed*crec.color;
-			++(pixels[pixelId].done);
+			if (crec.done) h_colors[s.pixelId] += s.not_absorbed*crec.color;
+			++(wu->pixels[local_pixelId].done);
 			++done_samples;
 		} else {
 			s.not_absorbed *= crec.color;
@@ -331,21 +334,22 @@ void renderer::compact_rays(work_unit* wu) {
 			wu->h_rays[i].direction = crec.direction;
 			++s.depth;
 		}
-		not_done = not_done || (pixels[pixelId].done < ns);
+		not_done = not_done || (wu->pixels[local_pixelId].done < ns);
 	}
 
 	if (done_samples > 0 && not_done) {
 		// sort uint ray [wu->start_idx, wu->end_idx[
-		for (uint i = 0; i < wu->length(); ++i) wu->pixel_idx[i] = wu->start_idx + i;
-		std::sort(wu->pixel_idx, wu->pixel_idx + wu->length(), pixel_compare(pixels, ns));
+		for (uint i = 0; i < wu->length(); ++i) wu->pixel_idx[i] = i;
+		std::sort(wu->pixel_idx, wu->pixel_idx + wu->length(), pixel_compare(wu->pixels, ns));
 		uint sampled = 0;
 		for (uint i = 0; i < wu->length(); ++i) {
 			const uint sId = wu->start_idx + i;
 			sample& s = wu->samples[i];
 			if (s.done) {
 				// generate new ray
-				const uint pixelId = wu->pixel_idx[sampled++];
-				pixels[pixelId].samples++;
+				const uint local_pixelId = wu->pixel_idx[sampled++];
+				const uint pixelId = wu->start_idx + local_pixelId;
+				wu->pixels[local_pixelId].samples++;
 				// then, generate a new sample
 				const unsigned int x = pixelId % nx;
 				const unsigned int y = ny - 1 - (pixelId / nx);
@@ -375,6 +379,7 @@ void renderer::destroy() {
 
 		delete[] wu->pixel_idx;
 		delete[] wu->samples;
+		delete[] wu->pixels;
 	}
 
 	// Free host memory
