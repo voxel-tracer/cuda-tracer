@@ -30,6 +30,7 @@ struct work_unit {
 	int * pixel_idx;
 	sample* samples;
 	pixel* pixels;
+	float3* h_colors;
 
 	bool done = false;
 
@@ -55,9 +56,10 @@ public:
 		const uint pixelId = get_pixelId(x, y);
 		const uint unitIdx = get_unitIdx(pixelId);
 		work_unit* wu = wunits[unitIdx];
-		const uint num_done = wu->pixels[pixelId - wu->start_idx].done;
+		const uint local_idx = pixelId - wu->start_idx;
+		const uint num_done = wu->pixels[local_idx].done;
 		if (num_done == 0) return make_float3(0, 0, 0);
-		return h_colors[pixelId] / float(num_done);
+		return wu->h_colors[local_idx] / float(num_done);
 	}
 
 	uint totalrays() const { return total_rays; }
@@ -83,9 +85,6 @@ public:
 	sphere* d_scene;
 	material* d_materials;
 	bool init_rnds = true;
-
-	//pixel* pixels;
-	float3* h_colors;
 
 	clock_t kernel = 0;
 	clock_t generate = 0;

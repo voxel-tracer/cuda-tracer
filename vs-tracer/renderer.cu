@@ -47,8 +47,6 @@ void renderer::prepare_kernel() {
 	remaining_pixels = num_pixels;
 	next_pixel = 0;
 	total_rays = 0;
-	
-	h_colors = new float3[num_pixels];
 
 	// allocate device memory for input
     d_scene = NULL;
@@ -76,6 +74,8 @@ void renderer::prepare_kernel() {
 		for (uint i = 0; i < unit_len; i++)
 			wu->pixels[i].samples = 1;
 
+		wu->h_colors = new float3[unit_len];
+
 		err(cudaMallocHost(&wu->h_rays, unit_len * sizeof(ray)), "allocate h_rays");
 		err(cudaMalloc((void **)&(wu->d_rays), unit_len * sizeof(ray)), "allocate device d_rays");
 		err(cudaMalloc((void **)&(wu->d_hits), unit_len * sizeof(cu_hit)), "allocate device d_hits");
@@ -96,17 +96,13 @@ void renderer::update_camera()
 {
 	const unsigned int num_pixels = numpixels();
 
-	// set temporary variables
-	for (unsigned int i = 0; i < num_pixels; i++) {
-		h_colors[i] = make_float3(0, 0, 0);
-	}
-
 	for (uint unit = 0; unit < num_units; unit++) {
 		work_unit* wu = wunits[unit];
 		wu->done = false;
 		for (uint i = 0; i < wu->length(); i++) {
 			wu->pixels[i].samples = 1;
 			wu->pixels[i].done = 0;
+			wu->h_colors[i] = make_float3(0, 0, 0);
 		}
 	}
 
@@ -125,11 +121,12 @@ void renderer::generate_rays() {
 }
 
 inline void renderer::generate_ray(work_unit* wu, const uint sampleId, int x, int y) {
+	// even though we can compute pixelId from (x,y), we still need the sampleId as its not necessarely the same (as more than a single sample point to the same pixel)
 	const float u = float(x + drand48()) / float(nx);
 	const float v = float(y + drand48()) / float(ny);
 	const uint local_ray_idx = sampleId - wu->start_idx;
 	cam->get_ray(u, v,wu->h_rays[local_ray_idx]);
-	wu->samples[local_ray_idx] = sample((ny - y - 1)*nx + x);
+	wu->samples[local_ray_idx] = sample(get_pixelId(x, y));
 }
 
 bool renderer::color(int ray_idx) {
@@ -322,7 +319,7 @@ void renderer::compact_rays(work_unit* wu) {
 		const uint local_pixelId = s.pixelId - wu->start_idx;
 		s.done = crec.done || s.depth == max_depth;
 		if (s.done) {
-			if (crec.done) h_colors[s.pixelId] += s.not_absorbed*crec.color;
+			if (crec.done) wu->h_colors[local_pixelId] += s.not_absorbed*crec.color;
 			++(wu->pixels[local_pixelId].done);
 			++done_samples;
 		} else {
@@ -377,6 +374,7 @@ void renderer::destroy() {
 		delete[] wu->pixel_idx;
 		delete[] wu->samples;
 		delete[] wu->pixels;
+		delete[] wu->h_colors;
 	}
 
 	// Free host memory
