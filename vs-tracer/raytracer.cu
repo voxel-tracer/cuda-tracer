@@ -245,7 +245,7 @@ int main(int argc, char** argv)
 	bool write_image = true;
 	bool show_window = false;
 
-	const uint num_threads = 2;
+	const uint num_threads = 4;
 	const int nx = 600;
 	const int ny = 300;
 	const int ns = 1000;
@@ -259,14 +259,14 @@ int main(int argc, char** argv)
 	const float phi = 1.832596f;
 	cam->look_from(theta, phi);
 
-	renderer r(cam, world, light_shape, nx, ny, ns, max_depth, 0.001f);
+	renderer r(cam, world, light_shape, nx, ny, ns, max_depth, 0.001f, num_threads);
 	r.prepare_kernel();
 
 	clock_t begin = clock();
 	thread t[num_threads];
 	// launch a group of threads 
 	for (uint i = 0; i < num_threads; i++)
-		t[i] = thread(call_from_thread, r, i);
+		t[i] = thread(call_from_thread, ref(r), i);
 	// join the threads with the main thread
 	for (uint i = 0; i < num_threads; i++)
 		t[i].join();

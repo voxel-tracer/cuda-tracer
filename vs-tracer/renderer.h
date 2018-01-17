@@ -32,7 +32,8 @@ struct work_unit {
 	cu_hit* d_hits;
 	clr_rec* h_clrs;
 	clr_rec* d_clrs;
-	bool compact = false;
+	int * pixel_idx;
+
 	bool done = false;
 
 	work_unit(uint start, uint end) :start_idx(start), end_idx(end) {}
@@ -41,8 +42,8 @@ struct work_unit {
 
 class renderer {
 public:
-	renderer(const camera* _cam, const hitable_list* w, const sphere *ls, unsigned int _nx, unsigned int _ny, unsigned int _ns, unsigned int _max_depth, float _min_attenuation):
-		cam(_cam), world(w), light_shape(ls), nx(_nx), ny(_ny), ns(_ns), max_depth(_max_depth), min_attenuation(_min_attenuation) {}
+	renderer(const camera* _cam, const hitable_list* w, const sphere *ls, unsigned int _nx, unsigned int _ny, unsigned int _ns, unsigned int _max_depth, float _min_attenuation, uint nunits):
+		cam(_cam), world(w), light_shape(ls), nx(_nx), ny(_ny), ns(_ns), max_depth(_max_depth), min_attenuation(_min_attenuation), num_units(nunits) {}
 
 	unsigned int numpixels() const { return nx*ny; }
 	bool is_not_done() const { return !(wunits[0]->done && wunits[1]->done); }
@@ -59,7 +60,6 @@ public:
 
 	bool color(int ray_idx);
 	void generate_rays();
-	void render();
 	
 	void render_work_unit(uint unit_idx);
 
@@ -86,7 +86,6 @@ public:
 	clock_t compact = 0;
 
 private:
-	void render_cycle(work_unit* wu1, work_unit* wu2);
 	void copy_rays_to_gpu(const work_unit* wu);
 	void start_kernel(const work_unit* wu);
 	void copy_colors_from_gpu(const work_unit* wu);
@@ -95,9 +94,9 @@ private:
 
 	uint total_rays = 0;
 	work_unit **wunits;
+	const uint num_units;
 	uint next_pixel = 0;
 	int remaining_pixels = 0;
 	uint num_runs = 0;
 	const sphere * const light_shape;
-	int* pixel_idx;
 };

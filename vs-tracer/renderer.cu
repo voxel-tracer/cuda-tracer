@@ -42,7 +42,7 @@ struct pixel_compare {
 
 void renderer::prepare_kernel() {
 	const unsigned int num_pixels = nx*ny;
-	const uint half_numpixels = num_pixels / 2;
+	const uint unit_numpixels = num_pixels / num_units; //TODO make sure we don't miss any rays because of precision loss
 
 	remaining_pixels = num_pixels;
 	next_pixel = 0;
@@ -51,7 +51,6 @@ void renderer::prepare_kernel() {
 	pixels = new pixel[num_pixels];
 	samples = new sample[num_pixels];
 	h_colors = new float3[num_pixels];
-	pixel_idx = new int[half_numpixels];
 
 	// allocate device memory for input
     d_scene = NULL;
@@ -65,36 +64,34 @@ void renderer::prepare_kernel() {
 
 	// set temporary variables
 	for (unsigned int i = 0; i < num_pixels; i++) {
-		pixels[i] = pixel(i, i / half_numpixels);
+		pixels[i] = pixel(i, i / unit_numpixels);
 		pixels[i].samples = 1;
 	}
 
-	wunits = new work_unit*[2];
+	wunits = new work_unit*[num_units];
+	uint cur_idx = 0;
+	for (uint unit = 0; unit < num_units; unit++) {
+		uint next_idx = cur_idx + unit_numpixels;
+		work_unit *wu = new work_unit(cur_idx, next_idx);
 
-	wunits[0] = new work_unit(0, half_numpixels);
-	wunits[1] = new work_unit(half_numpixels, num_pixels);
+		wu->pixel_idx = new int[wu->length()];
+		//for (uint i = 0; i < wu->length(); ++i) 
+		//	wu->pixel_idx[i] = wu->start_idx + i;
 
-	cudaMallocHost(&wunits[0]->h_rays, half_numpixels * sizeof(ray));
-	cudaMallocHost(&wunits[1]->h_rays, half_numpixels * sizeof(ray));
+		err(cudaMallocHost(&wu->h_rays, wu->length() * sizeof(ray)), "allocate h_rays");
+		err(cudaMalloc((void **)&(wu->d_rays), wu->length() * sizeof(ray)), "allocate device d_rays");
+		err(cudaMalloc((void **)&(wu->d_hits), wu->length() * sizeof(cu_hit)), "allocate device d_hits");
+		err(cudaMallocHost(&(wu->h_clrs), wu->length() * sizeof(clr_rec)), "allocate h_clrs");
+		err(cudaMalloc((void **)&(wu->d_clrs), wu->length() * sizeof(clr_rec)), "allocate device d_clrs");
+		err(cudaStreamCreate(&wu->stream), "cuda stream create");
 
-	err(cudaMalloc((void **)&(wunits[0]->d_rays), half_numpixels * sizeof(ray)), "allocate device d_rays");
-	err(cudaMalloc((void **)&(wunits[1]->d_rays), half_numpixels * sizeof(ray)), "allocate device d_rays");
-
-	err(cudaMalloc((void **)&(wunits[0]->d_hits), half_numpixels * sizeof(cu_hit)), "allocate device d_hits");
-	err(cudaMalloc((void **)&(wunits[1]->d_hits), half_numpixels * sizeof(cu_hit)), "allocate device d_hits");
-
-	cudaMallocHost(&(wunits[0]->h_clrs), half_numpixels * sizeof(clr_rec));
-	cudaMallocHost(&(wunits[1]->h_clrs), half_numpixels * sizeof(clr_rec));
-
-	err(cudaMalloc((void **)&(wunits[0]->d_clrs), half_numpixels * sizeof(clr_rec)), "allocate device d_clrs");
-	err(cudaMalloc((void **)&(wunits[1]->d_clrs), half_numpixels * sizeof(clr_rec)), "allocate device d_clrs");
+		wunits[unit] = wu;
+		cur_idx = next_idx;
+	}
 
 	//clock_t start = clock();
 	generate_rays();
 	//generate += clock() - start;
-
-	err(cudaStreamCreate(&wunits[0]->stream), "cuda stream create");
-	err(cudaStreamCreate(&wunits[1]->stream), "cuda stream create");
 }
 
 void renderer::update_camera()
@@ -109,23 +106,14 @@ void renderer::update_camera()
 		pixels[i].done = 0;
 	}
 
-	// reset the order of all work units otherwise generate_rays() will be wrong
-	if (wunits[0]->start_idx > wunits[1]->start_idx) {
-		work_unit* wu = wunits[0];
-		wunits[0] = wunits[1];
-		wunits[1] = wu;
-	}
-	for (uint i = 0; i < 2; i++) {
-		wunits[i]->compact = false;
-		wunits[i]->done = false;
-	}
+	for (uint unit = 0; unit < num_units; unit++)
+		wunits[unit]->done = false;
 
 	generate_rays();
 	num_runs = 0;
 }
 
 void renderer::generate_rays() {
-	const uint half_pixels = numpixels() / 2;
 	uint ray_idx = 0;
 	for (int j = ny - 1; j >= 0; j--)
 		for (int i = 0; i < nx; ++i, ++ray_idx) {
@@ -311,50 +299,13 @@ void renderer::start_kernel(const work_unit* wu) {
 	//err(cudaGetLastError(), "launch simple_color kernel");
 }
 
-void renderer::render() {
-	//run_kernel(wunitA);
-	//run_kernel(wunitB);
-	render_cycle(wunits[0], wunits[1]);
-
-	// swap work units
-	work_unit* tmp = wunits[0];
-	wunits[0] = wunits[1];
-	wunits[1] = tmp;
-}
-
-void renderer::render_cycle(work_unit* wu1, work_unit* wu2) {
-
-	if (!wu1->done) {
-		clock_t start = clock();
-		copy_rays_to_gpu(wu1);
-		start_kernel(wu1);
-		copy_colors_from_gpu(wu1);
-		cudaStreamQuery(wu1->stream); // flush stream to start the kernel
-		wu1->compact = true;
-		total_rays += wu1->length();
-		kernel += clock() - start;
-	}
-
-	if (wu2->compact) {
-		clock_t start = clock();
-		compact_rays(wu2);
-		wu2->compact = false;
-		compact += clock() - start;
-	}
-
-	if (!wu1->done) {
-		clock_t start = clock();
-		cudaStreamSynchronize(wu1->stream);
-		kernel += clock() - start;
-	}
-}
-
 void renderer::render_work_unit(uint unit_idx) {
 	work_unit* wu = wunits[unit_idx];
 	while (!wu->done) {
 		copy_rays_to_gpu(wu);
 		start_kernel(wu);
 		copy_colors_from_gpu(wu);
+		cudaStreamQuery(wu->stream); // flush stream to start the kernel 
 		cudaStreamSynchronize(wu->stream);
 		compact_rays(wu);
 	}
@@ -384,15 +335,15 @@ void renderer::compact_rays(work_unit* wu) {
 
 	if (done_samples > 0 && not_done) {
 		// sort uint ray [wu->start_idx, wu->end_idx[
-		for (uint i = 0; i < wu->length(); ++i) pixel_idx[i] = wu->start_idx + i;
-		std::sort(pixel_idx, pixel_idx + wu->length(), pixel_compare(pixels, ns));
+		for (uint i = 0; i < wu->length(); ++i) wu->pixel_idx[i] = wu->start_idx + i;
+		std::sort(wu->pixel_idx, wu->pixel_idx + wu->length(), pixel_compare(pixels, ns));
 		uint sampled = 0;
 		for (uint i = 0; i < wu->length(); ++i) {
 			const uint sId = wu->start_idx + i;
 			sample& s = samples[sId];
 			if (s.done) {
 				// generate new ray
-				const uint pixelId = pixel_idx[sampled++];
+				const uint pixelId = wu->pixel_idx[sampled++];
 				pixels[pixelId].samples++;
 				// then, generate a new sample
 				const unsigned int x = pixelId % nx;
@@ -409,20 +360,20 @@ void renderer::destroy() {
 	// Free device global memory
 	err(cudaFree(d_scene), "free device d_scene");
 	err(cudaFree(d_materials), "free device d_materials");
-	err(cudaFree(wunits[0]->d_rays), "free device d_rays");
-	err(cudaFree(wunits[1]->d_rays), "free device d_rays");
-	err(cudaFree(wunits[0]->d_hits), "free device d_hits");
-	err(cudaFree(wunits[1]->d_hits), "free device d_hits");
-	err(cudaFree(wunits[0]->d_clrs), "free device d_clrs");
-	err(cudaFree(wunits[1]->d_clrs), "free device d_clrs");
 
-	err(cudaStreamDestroy(wunits[0]->stream), "destroy cuda stream");
-	err(cudaStreamDestroy(wunits[1]->stream), "destroy cuda stream");
+	for (uint unit = 0; unit < num_units; unit++) {
+		work_unit *wu = wunits[unit];
+		err(cudaFree(wu->d_rays), "free device d_rays");
+		err(cudaFree(wu->d_hits), "free device d_hits");
+		err(cudaFree(wu->d_clrs), "free device d_clrs");
 
-	cudaFreeHost(wunits[0]->h_clrs);
-	cudaFreeHost(wunits[1]->h_clrs);
-	cudaFreeHost(wunits[0]->h_rays);
-	cudaFreeHost(wunits[1]->h_rays);
+		err(cudaStreamDestroy(wu->stream), "destroy cuda stream");
+
+		cudaFreeHost(wu->h_clrs);
+		cudaFreeHost(wu->h_rays);
+
+		delete[] wu->pixel_idx;
+	}
 
 	// Free host memory
 	delete[] samples;
