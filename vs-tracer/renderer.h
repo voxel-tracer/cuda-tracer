@@ -33,6 +33,7 @@ struct work_unit {
 	clr_rec* h_clrs;
 	clr_rec* d_clrs;
 	int * pixel_idx;
+	sample* samples;
 
 	bool done = false;
 
@@ -73,7 +74,6 @@ public:
 	const uint max_depth;
 	const float min_attenuation;
 
-	sample* samples;
 	sphere* d_scene;
 	material* d_materials;
 	bool init_rnds = true;

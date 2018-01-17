@@ -49,7 +49,6 @@ void renderer::prepare_kernel() {
 	total_rays = 0;
 	
 	pixels = new pixel[num_pixels];
-	samples = new sample[num_pixels];
 	h_colors = new float3[num_pixels];
 
 	// allocate device memory for input
@@ -73,16 +72,19 @@ void renderer::prepare_kernel() {
 	for (uint unit = 0; unit < num_units; unit++) {
 		uint next_idx = cur_idx + unit_numpixels;
 		work_unit *wu = new work_unit(cur_idx, next_idx);
+		const uint unit_len = wu->length();
 
-		wu->pixel_idx = new int[wu->length()];
+		wu->pixel_idx = new int[unit_len];
 		//for (uint i = 0; i < wu->length(); ++i) 
 		//	wu->pixel_idx[i] = wu->start_idx + i;
+		wu->samples = new sample[unit_len];
 
-		err(cudaMallocHost(&wu->h_rays, wu->length() * sizeof(ray)), "allocate h_rays");
-		err(cudaMalloc((void **)&(wu->d_rays), wu->length() * sizeof(ray)), "allocate device d_rays");
-		err(cudaMalloc((void **)&(wu->d_hits), wu->length() * sizeof(cu_hit)), "allocate device d_hits");
-		err(cudaMallocHost(&(wu->h_clrs), wu->length() * sizeof(clr_rec)), "allocate h_clrs");
-		err(cudaMalloc((void **)&(wu->d_clrs), wu->length() * sizeof(clr_rec)), "allocate device d_clrs");
+
+		err(cudaMallocHost(&wu->h_rays, unit_len * sizeof(ray)), "allocate h_rays");
+		err(cudaMalloc((void **)&(wu->d_rays), unit_len * sizeof(ray)), "allocate device d_rays");
+		err(cudaMalloc((void **)&(wu->d_hits), unit_len * sizeof(cu_hit)), "allocate device d_hits");
+		err(cudaMallocHost(&(wu->h_clrs), unit_len * sizeof(clr_rec)), "allocate h_clrs");
+		err(cudaMalloc((void **)&(wu->d_clrs), unit_len * sizeof(clr_rec)), "allocate device d_clrs");
 		err(cudaStreamCreate(&wu->stream), "cuda stream create");
 
 		wunits[unit] = wu;
@@ -127,7 +129,7 @@ inline void renderer::generate_ray(work_unit* wu, const uint sampleId, int x, in
 	const float v = float(y + drand48()) / float(ny);
 	const uint local_ray_idx = sampleId - wu->start_idx;
 	cam->get_ray(u, v,wu->h_rays[local_ray_idx]);
-	samples[sampleId] = sample((ny - y - 1)*nx + x);
+	wu->samples[local_ray_idx] = sample((ny - y - 1)*nx + x);
 }
 
 bool renderer::color(int ray_idx) {
@@ -315,9 +317,8 @@ void renderer::compact_rays(work_unit* wu) {
 	uint done_samples = 0;
 	bool not_done = false;
 	for (uint i = 0; i < wu->length(); ++i) {
-		const uint sId = wu->start_idx + i;
 		const clr_rec& crec = wu->h_clrs[i];
-		sample& s = samples[sId];
+		sample& s = wu->samples[i];
 		const uint pixelId = s.pixelId;
 		s.done = crec.done || s.depth == max_depth;
 		if (s.done) {
@@ -340,7 +341,7 @@ void renderer::compact_rays(work_unit* wu) {
 		uint sampled = 0;
 		for (uint i = 0; i < wu->length(); ++i) {
 			const uint sId = wu->start_idx + i;
-			sample& s = samples[sId];
+			sample& s = wu->samples[i];
 			if (s.done) {
 				// generate new ray
 				const uint pixelId = wu->pixel_idx[sampled++];
@@ -373,9 +374,9 @@ void renderer::destroy() {
 		cudaFreeHost(wu->h_rays);
 
 		delete[] wu->pixel_idx;
+		delete[] wu->samples;
 	}
 
 	// Free host memory
-	delete[] samples;
 	delete[] wunits;
 }
